@@ -13,6 +13,7 @@ import {
 } from '@/lib/format';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import AddTransactionModal from '@/components/AddTransactionModal';
+import ExportModal from '@/components/ExportModal';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
@@ -34,6 +35,7 @@ export default function RecordsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // Filter transactions for current month
   const monthTransactions = useMemo(() =>
@@ -194,21 +196,37 @@ export default function RecordsScreen() {
     <ScreenContainer containerClassName="bg-background">
       {/* Month Navigator */}
       <View style={[styles.monthNav, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
-        <Pressable
-          style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.5 }]}
-          onPress={() => handleNavigateMonth(-1)}
-        >
-          <IconSymbol name="chevron.left" size={22} color={colors.primary} />
-        </Pressable>
+        {/* Left: export + prev */}
+        <View style={styles.navSide}>
+          <Pressable
+            style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.5 }]}
+            onPress={() => setShowExportModal(true)}
+          >
+            <IconSymbol name="square.and.arrow.up" size={20} color={colors.primary} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.5 }]}
+            onPress={() => handleNavigateMonth(-1)}
+          >
+            <IconSymbol name="chevron.left" size={22} color={colors.primary} />
+          </Pressable>
+        </View>
+
+        {/* Center: month label */}
         <Text style={[styles.monthLabel, { color: colors.foreground }]}>
           {formatMonthYear(year, month)}
         </Text>
-        <Pressable
-          style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.5 }]}
-          onPress={() => handleNavigateMonth(1)}
-        >
-          <IconSymbol name="chevron.right" size={22} color={colors.primary} />
-        </Pressable>
+
+        {/* Right: next + placeholder to balance */}
+        <View style={[styles.navSide, styles.navSideRight]}>
+          <Pressable
+            style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.5 }]}
+            onPress={() => handleNavigateMonth(1)}
+          >
+            <IconSymbol name="chevron.right" size={22} color={colors.primary} />
+          </Pressable>
+          <View style={styles.navPlaceholder} />
+        </View>
       </View>
 
       {/* Summary Bar */}
@@ -259,6 +277,12 @@ export default function RecordsScreen() {
         onClose={() => { setShowEditModal(false); setEditingTransaction(null); }}
         onSaved={() => { setShowEditModal(false); setEditingTransaction(null); }}
       />
+
+      {/* Export Modal */}
+      <ExportModal
+        visible={showExportModal}
+        onClose={() => setShowExportModal(false)}
+      />
     </ScreenContainer>
   );
 }
@@ -268,17 +292,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
     borderBottomWidth: 0.5,
+  },
+  navSide: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  navSideRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  navPlaceholder: {
+    width: 36,
   },
   navBtn: {
     padding: 8,
   },
   monthLabel: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
     letterSpacing: 0.2,
+    flex: 1,
+    textAlign: 'center',
   },
   summaryBar: {
     flexDirection: 'row',

@@ -50,6 +50,7 @@ const MAPPING = {
   "camera.fill": "camera-alt",
   "square.and.arrow.up": "share",
   "arrow.clockwise": "refresh",
+  "arrow.down.circle.fill": "download",
   "line.3.horizontal.decrease.circle": "filter-list",
 } as IconMapping;
 
