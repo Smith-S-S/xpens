@@ -1,4 +1,8 @@
-import React, { createContext, useContext, useEffect, useReducer, useCallback } from 'react';
+import React, {
+  createContext, useContext, useEffect, useReducer,
+  useCallback, useRef,
+} from 'react';
+import { useAuth, useUser } from '@clerk/clerk-expo';
 import { Account, Category, Transaction } from './types';
 import {
   initializeStorage,
@@ -11,9 +15,18 @@ import {
   deleteAccount,
   saveCategory,
   deleteCategory,
+  setTransactions,
   computeAccountBalance,
 } from './storage';
 import { AccountWithBalance } from './types';
+import {
+  upsertSupabaseUser,
+  fetchRemoteTransactions,
+  pushTransaction,
+  pushTransactionsBatch,
+  deleteRemoteTransaction,
+  mergeTransactions,
+} from './supabase-sync';
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
@@ -27,6 +40,7 @@ interface AppState {
 type AppAction =
   | { type: 'SET_ALL'; transactions: Transaction[]; accounts: Account[]; categories: Category[] }
   | { type: 'SET_LOADING'; loading: boolean }
+  | { type: 'SET_TRANSACTIONS'; transactions: Transaction[] }
   | { type: 'UPSERT_TRANSACTION'; transaction: Transaction }
   | { type: 'DELETE_TRANSACTION'; id: string }
   | { type: 'UPSERT_ACCOUNT'; account: Account }
@@ -46,6 +60,8 @@ function reducer(state: AppState, action: AppAction): AppState {
       };
     case 'SET_LOADING':
       return { ...state, loading: action.loading };
+    case 'SET_TRANSACTIONS':
+      return { ...state, transactions: action.transactions };
     case 'UPSERT_TRANSACTION': {
       const idx = state.transactions.findIndex(t => t.id === action.transaction.id);
       if (idx >= 0) {
@@ -95,7 +111,6 @@ function reducer(state: AppState, action: AppAction): AppState {
 interface AppContextValue {
   state: AppState;
   accountsWithBalance: AccountWithBalance[];
-  // Actions
   addTransaction: (tx: Transaction) => Promise<void>;
   updateTransaction: (tx: Transaction) => Promise<void>;
   removeTransaction: (id: string) => Promise<void>;
@@ -120,6 +135,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     loading: true,
   });
 
+  // Clerk auth — available because AppProvider is inside ClerkProvider > ClerkLoaded
+  const { isLoaded: authLoaded, userId } = useAuth();
+  const { user } = useUser();
+
+  // Supabase UUID for the signed-in user (null = guest / not yet synced)
+  const sbUserIdRef = useRef<string | null>(null);
+
+  // Track which Clerk user we last synced to avoid double-syncing
+  const lastSyncedClerkIdRef = useRef<string | null>(null);
+
+  // Always-current references used inside async callbacks to avoid stale closures
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; }, [state]);
+
+  // ── Load from local storage ──────────────────────────────────────────────
+
   const loadAll = useCallback(async () => {
     await initializeStorage();
     const [transactions, accounts, categories] = await Promise.all([
@@ -134,24 +165,83 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     loadAll();
   }, [loadAll]);
 
+  // ── Supabase sync (signed-in users only) ────────────────────────────────
+
+  useEffect(() => {
+    // Wait until Clerk is ready, user is signed in, and local storage has loaded
+    if (!authLoaded || !userId || !user || state.loading) return;
+
+    // Only sync once per Clerk user per session
+    if (lastSyncedClerkIdRef.current === userId) return;
+    lastSyncedClerkIdRef.current = userId;
+
+    const syncWithSupabase = async () => {
+      // 1. Upsert user record → get Supabase UUID
+      const sbUserId = await upsertSupabaseUser(
+        userId,
+        user.fullName ?? null,
+        user.primaryEmailAddress?.emailAddress ?? null,
+        user.imageUrl ?? null,
+      );
+      if (!sbUserId) return; // network/config issue — stay local
+
+      sbUserIdRef.current = sbUserId;
+
+      const { categories, accounts, transactions: localTx } = stateRef.current;
+
+      // 2. Push all local transactions up first (handles guest→signed-in migration)
+      await pushTransactionsBatch(localTx, sbUserId, categories, accounts);
+
+      // 3. Fetch all remote transactions
+      const remoteTx = await fetchRemoteTransactions(sbUserId);
+
+      // 4. Merge (last-write-wins by updatedAt)
+      const merged = mergeTransactions(localTx, remoteTx);
+
+      // 5. Persist merged list locally and update state
+      await setTransactions(merged);
+      dispatch({ type: 'SET_TRANSACTIONS', transactions: merged });
+    };
+
+    syncWithSupabase().catch(e => console.warn('[AppContext] sync error:', e));
+  }, [authLoaded, userId, user, state.loading]);
+
+  // ── Computed ─────────────────────────────────────────────────────────────
+
   const accountsWithBalance: AccountWithBalance[] = state.accounts.map(acc => ({
     ...acc,
     balance: computeAccountBalance(acc, state.transactions),
   }));
 
+  // ── Mutations ────────────────────────────────────────────────────────────
+
   const addTransaction = useCallback(async (tx: Transaction) => {
     await saveTransaction(tx);
     dispatch({ type: 'UPSERT_TRANSACTION', transaction: tx });
+    if (sbUserIdRef.current) {
+      const { categories, accounts } = stateRef.current;
+      pushTransaction(tx, sbUserIdRef.current, categories, accounts)
+        .catch(e => console.warn('[AppContext] push error:', e));
+    }
   }, []);
 
   const updateTransaction = useCallback(async (tx: Transaction) => {
     await saveTransaction(tx);
     dispatch({ type: 'UPSERT_TRANSACTION', transaction: tx });
+    if (sbUserIdRef.current) {
+      const { categories, accounts } = stateRef.current;
+      pushTransaction(tx, sbUserIdRef.current, categories, accounts)
+        .catch(e => console.warn('[AppContext] push error:', e));
+    }
   }, []);
 
   const removeTransaction = useCallback(async (id: string) => {
     await deleteTransaction(id);
     dispatch({ type: 'DELETE_TRANSACTION', id });
+    if (sbUserIdRef.current) {
+      deleteRemoteTransaction(id)
+        .catch(e => console.warn('[AppContext] delete error:', e));
+    }
   }, []);
 
   const addAccount = useCallback(async (account: Account) => {

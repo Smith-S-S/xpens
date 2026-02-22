@@ -45,6 +45,11 @@ export async function deleteTransaction(id: string): Promise<void> {
   await AsyncStorage.setItem(KEYS.TRANSACTIONS, JSON.stringify(filtered));
 }
 
+/** Bulk-replace the entire transactions list (used when syncing from Supabase). */
+export async function setTransactions(transactions: Transaction[]): Promise<void> {
+  await AsyncStorage.setItem(KEYS.TRANSACTIONS, JSON.stringify(transactions));
+}
+
 // ─── Accounts ────────────────────────────────────────────────────────────────
 
 export async function getAccounts(): Promise<Account[]> {
