@@ -1,5 +1,6 @@
-import { View, type ViewProps } from "react-native";
+import { View, StyleSheet, type ViewProps } from "react-native";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
+import Svg, { Defs, RadialGradient, Stop, Rect } from "react-native-svg";
 
 import { cn } from "@/lib/utils";
 
@@ -56,6 +57,26 @@ export function ScreenContainer({
       )}
       {...props}
     >
+      {/* Orange radial glow at bottom — uses SVG so no extra native modules needed */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <Svg width="100%" height="100%">
+          <Defs>
+            <RadialGradient
+              id="bgGlow"
+              cx="50%"
+              cy="100%"
+              rx="70%"
+              ry="55%"
+              gradientUnits="objectBoundingBox"
+            >
+              <Stop offset="0%" stopColor="#FF6803" stopOpacity="0.18" />
+              <Stop offset="100%" stopColor="#FF6803" stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
+          <Rect x="0" y="0" width="100%" height="100%" fill="url(#bgGlow)" />
+        </Svg>
+      </View>
+
       <SafeAreaView
         edges={edges}
         className={cn("flex-1", safeAreaClassName)}
