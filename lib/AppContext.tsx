@@ -2,6 +2,7 @@ import React, {
   createContext, useContext, useEffect, useReducer,
   useCallback, useRef,
 } from 'react';
+import { AppState } from 'react-native';
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import { Account, Category, Transaction } from './types';
 import {
@@ -17,6 +18,9 @@ import {
   deleteCategory,
   setTransactions,
   computeAccountBalance,
+  addPendingDelete,
+  getPendingDeletes,
+  clearPendingDeletes,
 } from './storage';
 import { AccountWithBalance } from './types';
 import {
@@ -25,6 +29,7 @@ import {
   pushTransaction,
   pushTransactionsBatch,
   deleteRemoteTransaction,
+  deleteRemoteTransactionsBatch,
   mergeTransactions,
 } from './supabase-sync';
 
@@ -125,6 +130,9 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+// Minimum ms between two background syncs (2 minutes)
+const SYNC_COOLDOWN_MS = 2 * 60 * 1000;
+
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -135,19 +143,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     loading: true,
   });
 
-  // Clerk auth — available because AppProvider is inside ClerkProvider > ClerkLoaded
   const { isLoaded: authLoaded, userId } = useAuth();
   const { user } = useUser();
 
-  // Supabase UUID for the signed-in user (null = guest / not yet synced)
+  // Supabase UUID once the user is synced
   const sbUserIdRef = useRef<string | null>(null);
-
-  // Track which Clerk user we last synced to avoid double-syncing
-  const lastSyncedClerkIdRef = useRef<string | null>(null);
-
-  // Always-current references used inside async callbacks to avoid stale closures
-  const stateRef = useRef(state);
-  useEffect(() => { stateRef.current = state; }, [state]);
+  // Timestamp of last completed sync (used for AppState cooldown)
+  const lastSyncAtRef = useRef<number>(0);
+  // Prevent concurrent syncs
+  const isSyncingRef = useRef(false);
 
   // ── Load from local storage ──────────────────────────────────────────────
 
@@ -165,46 +169,83 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     loadAll();
   }, [loadAll]);
 
-  // ── Supabase sync (signed-in users only) ────────────────────────────────
+  // ── Core sync function ───────────────────────────────────────────────────
+
+  /**
+   * Full sync with Supabase:
+   *  1. Push all local transactions (covers offline adds / edits)
+   *  2. Flush the pending-deletes queue (throws on network error → queue is kept for retry)
+   *  3. Fetch remote + merge (last-write-wins) + persist locally
+   */
+  const performSync = useCallback(async (sbUserId: string) => {
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
+    try {
+      const [localTx, categories, accounts] = await Promise.all([
+        getTransactions(),
+        getCategories(),
+        getAccounts(),
+      ]);
+
+      // 1. Push local transactions (handles offline adds / edits)
+      await pushTransactionsBatch(localTx, sbUserId, categories, accounts);
+
+      // 2. Flush pending deletes — if this throws (network error) we stop here
+      //    and the queue stays intact for the next sync attempt.
+      const pendingDeletes = await getPendingDeletes();
+      if (pendingDeletes.length > 0) {
+        await deleteRemoteTransactionsBatch(pendingDeletes);
+        await clearPendingDeletes();
+      }
+
+      // 3. Fetch remote + merge + save
+      const remoteTx = await fetchRemoteTransactions(sbUserId);
+      const merged = mergeTransactions(localTx, remoteTx);
+      await setTransactions(merged);
+      dispatch({ type: 'SET_TRANSACTIONS', transactions: merged });
+
+      lastSyncAtRef.current = Date.now();
+    } finally {
+      isSyncingRef.current = false;
+    }
+  }, []);
+
+  // ── Initial Supabase sync (when user signs in) ───────────────────────────
 
   useEffect(() => {
-    // Wait until Clerk is ready, user is signed in, and local storage has loaded
     if (!authLoaded || !userId || !user || state.loading) return;
 
-    // Only sync once per Clerk user per session
-    if (lastSyncedClerkIdRef.current === userId) return;
-    lastSyncedClerkIdRef.current = userId;
+    // Only upsert the user record and kick off the first sync once
+    if (sbUserIdRef.current) return;
 
-    const syncWithSupabase = async () => {
-      // 1. Upsert user record → get Supabase UUID
+    const initialSync = async () => {
       const sbUserId = await upsertSupabaseUser(
         userId,
         user.fullName ?? null,
         user.primaryEmailAddress?.emailAddress ?? null,
         user.imageUrl ?? null,
       );
-      if (!sbUserId) return; // network/config issue — stay local
+      if (!sbUserId) return; // network / config issue — stay local
 
       sbUserIdRef.current = sbUserId;
-
-      const { categories, accounts, transactions: localTx } = stateRef.current;
-
-      // 2. Push all local transactions up first (handles guest→signed-in migration)
-      await pushTransactionsBatch(localTx, sbUserId, categories, accounts);
-
-      // 3. Fetch all remote transactions
-      const remoteTx = await fetchRemoteTransactions(sbUserId);
-
-      // 4. Merge (last-write-wins by updatedAt)
-      const merged = mergeTransactions(localTx, remoteTx);
-
-      // 5. Persist merged list locally and update state
-      await setTransactions(merged);
-      dispatch({ type: 'SET_TRANSACTIONS', transactions: merged });
+      await performSync(sbUserId);
     };
 
-    syncWithSupabase().catch(e => console.warn('[AppContext] sync error:', e));
-  }, [authLoaded, userId, user, state.loading]);
+    initialSync().catch(e => console.warn('[AppContext] initial sync error:', e));
+  }, [authLoaded, userId, user, state.loading, performSync]);
+
+  // ── Re-sync when app comes to foreground (catches offline changes) ───────
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', nextState => {
+      if (nextState !== 'active') return;
+      const sbId = sbUserIdRef.current;
+      if (!sbId) return;
+      if (Date.now() - lastSyncAtRef.current < SYNC_COOLDOWN_MS) return;
+      performSync(sbId).catch(e => console.warn('[AppContext] foreground sync error:', e));
+    });
+    return () => sub.remove();
+  }, [performSync]);
 
   // ── Computed ─────────────────────────────────────────────────────────────
 
@@ -218,30 +259,49 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const addTransaction = useCallback(async (tx: Transaction) => {
     await saveTransaction(tx);
     dispatch({ type: 'UPSERT_TRANSACTION', transaction: tx });
-    if (sbUserIdRef.current) {
-      const { categories, accounts } = stateRef.current;
-      pushTransaction(tx, sbUserIdRef.current, categories, accounts)
-        .catch(e => console.warn('[AppContext] push error:', e));
+    const sbId = sbUserIdRef.current;
+    if (sbId) {
+      const [categories, accounts] = await Promise.all([getCategories(), getAccounts()]);
+      // Fire-and-forget; if offline, next performSync pushes it via pushTransactionsBatch
+      pushTransaction(tx, sbId, categories, accounts)
+        .catch(e => console.warn('[AppContext] add→supabase error:', e));
     }
   }, []);
 
   const updateTransaction = useCallback(async (tx: Transaction) => {
     await saveTransaction(tx);
     dispatch({ type: 'UPSERT_TRANSACTION', transaction: tx });
-    if (sbUserIdRef.current) {
-      const { categories, accounts } = stateRef.current;
-      pushTransaction(tx, sbUserIdRef.current, categories, accounts)
-        .catch(e => console.warn('[AppContext] push error:', e));
+    const sbId = sbUserIdRef.current;
+    if (sbId) {
+      const [categories, accounts] = await Promise.all([getCategories(), getAccounts()]);
+      pushTransaction(tx, sbId, categories, accounts)
+        .catch(e => console.warn('[AppContext] update→supabase error:', e));
     }
   }, []);
 
   const removeTransaction = useCallback(async (id: string) => {
+    // Local delete is always immediate
     await deleteTransaction(id);
     dispatch({ type: 'DELETE_TRANSACTION', id });
-    if (sbUserIdRef.current) {
-      deleteRemoteTransaction(id)
-        .catch(e => console.warn('[AppContext] delete error:', e));
-    }
+
+    const sbId = sbUserIdRef.current;
+    if (!sbId) return; // guest mode — local only
+
+    // Queue the delete so performSync can flush it even if offline right now
+    await addPendingDelete(id);
+
+    // Also try immediately; if it succeeds, remove from queue
+    deleteRemoteTransaction(id)
+      .then(async () => {
+        const ids = await getPendingDeletes();
+        const remaining = ids.filter(i => i !== id);
+        await clearPendingDeletes();
+        // Re-add any other pending deletes that were in the queue
+        for (const remaining_id of remaining) {
+          await addPendingDelete(remaining_id);
+        }
+      })
+      .catch(e => console.warn('[AppContext] delete→supabase (queued for retry):', e));
   }, []);
 
   const addAccount = useCallback(async (account: Account) => {

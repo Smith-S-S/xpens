@@ -14,7 +14,7 @@ import {
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import AddTransactionModal from '@/components/AddTransactionModal';
 import { useSidebar } from '@/lib/SidebarContext';
-import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
 
@@ -134,7 +134,7 @@ export default function RecordsScreen() {
     const amountPrefix = item.type === 'income' ? '+' : item.type === 'expense' ? '-' : '';
 
     return (
-      <Swipeable
+      <ReanimatedSwipeable
         renderRightActions={() => renderRightActions(item)}
         overshootRight={false}
       >
@@ -161,7 +161,7 @@ export default function RecordsScreen() {
             {amountPrefix}{formatCurrency(item.amount)}
           </Text>
         </Pressable>
-      </Swipeable>
+      </ReanimatedSwipeable>
     );
   }, [colors, getCategoryById, getAccountById, handleEditTransaction, renderRightActions]);
 

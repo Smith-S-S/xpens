@@ -7,6 +7,7 @@ const KEYS = {
   ACCOUNTS: 'mymoney_accounts',
   CATEGORIES: 'mymoney_categories',
   INITIALIZED: 'mymoney_initialized',
+  PENDING_DELETES: 'mymoney_pending_deletes',
 };
 
 // ─── Initialization ──────────────────────────────────────────────────────────
@@ -103,6 +104,24 @@ export async function deleteCategory(id: string): Promise<void> {
   const categories = await getCategories();
   const filtered = categories.filter(c => c.id !== id);
   await AsyncStorage.setItem(KEYS.CATEGORIES, JSON.stringify(filtered));
+}
+
+// ─── Pending Deletes Queue (for offline → Supabase sync) ─────────────────────
+
+export async function getPendingDeletes(): Promise<string[]> {
+  const raw = await AsyncStorage.getItem(KEYS.PENDING_DELETES);
+  return raw ? JSON.parse(raw) : [];
+}
+
+export async function addPendingDelete(id: string): Promise<void> {
+  const ids = await getPendingDeletes();
+  if (!ids.includes(id)) {
+    await AsyncStorage.setItem(KEYS.PENDING_DELETES, JSON.stringify([...ids, id]));
+  }
+}
+
+export async function clearPendingDeletes(): Promise<void> {
+  await AsyncStorage.removeItem(KEYS.PENDING_DELETES);
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

@@ -159,6 +159,19 @@ export async function deleteRemoteTransaction(id: string): Promise<void> {
   if (error) console.warn('[supabase] deleteTransaction:', error.message);
 }
 
+/**
+ * Batch-deletes transactions by IDs.
+ * Throws on error so the caller can skip clearing the pending-deletes queue
+ * and retry on next sync.
+ */
+export async function deleteRemoteTransactionsBatch(ids: string[]): Promise<void> {
+  const sb = getSupabase();
+  if (!sb || ids.length === 0) return;
+
+  const { error } = await sb.from('transactions').delete().in('id', ids);
+  if (error) throw new Error(`[supabase] batch delete: ${error.message}`);
+}
+
 // ─── Merge (last-write-wins by updatedAt) ────────────────────────────────────
 
 /**

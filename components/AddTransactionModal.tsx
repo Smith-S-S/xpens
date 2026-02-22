@@ -565,7 +565,7 @@ export default function AddTransactionModal({
             </View>
           </ScrollView>
 
-          {/* Save Button */}
+          {/* Save / Delete Buttons */}
           <View style={[styles.saveContainer, { borderTopColor: colors.border }]}>
             <Pressable
               style={({ pressed }) => [
@@ -577,6 +577,19 @@ export default function AddTransactionModal({
             >
               <Text style={styles.saveBtnText}>{isEdit ? 'UPDATE' : 'SAVE'}</Text>
             </Pressable>
+            {isEdit && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.deleteBtn,
+                  { borderColor: colors.expense },
+                  pressed && { opacity: 0.7 },
+                ]}
+                onPress={handleDelete}
+              >
+                <IconSymbol name="trash.fill" size={16} color={colors.expense} />
+                <Text style={[styles.deleteBtnText, { color: colors.expense }]}>DELETE</Text>
+              </Pressable>
+            )}
           </View>
         </View>
       </View>
@@ -749,6 +762,21 @@ const styles = StyleSheet.create({
   saveBtnText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderRadius: 14,
+    paddingVertical: 13,
+    marginTop: 10,
+  },
+  deleteBtnText: {
+    fontSize: 15,
     fontWeight: '700',
     letterSpacing: 1,
   },
