@@ -8,6 +8,7 @@ const KEYS = {
   CATEGORIES: 'mymoney_categories',
   INITIALIZED: 'mymoney_initialized',
   PENDING_DELETES: 'mymoney_pending_deletes',
+  CURRENCY: 'mymoney_currency',
 };
 
 // ─── Initialization ──────────────────────────────────────────────────────────
@@ -122,6 +123,17 @@ export async function addPendingDelete(id: string): Promise<void> {
 
 export async function clearPendingDeletes(): Promise<void> {
   await AsyncStorage.removeItem(KEYS.PENDING_DELETES);
+}
+
+// ─── Currency ─────────────────────────────────────────────────────────────────
+
+export async function getCurrency(): Promise<string> {
+  const raw = await AsyncStorage.getItem(KEYS.CURRENCY);
+  return raw ?? '$';
+}
+
+export async function saveCurrency(symbol: string): Promise<void> {
+  await AsyncStorage.setItem(KEYS.CURRENCY, symbol);
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

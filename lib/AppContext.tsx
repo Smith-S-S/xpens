@@ -21,6 +21,8 @@ import {
   addPendingDelete,
   getPendingDeletes,
   clearPendingDeletes,
+  getCurrency,
+  saveCurrency,
 } from './storage';
 import { AccountWithBalance } from './types';
 import {
@@ -40,11 +42,13 @@ interface AppState {
   accounts: Account[];
   categories: Category[];
   loading: boolean;
+  currency: string;
 }
 
 type AppAction =
-  | { type: 'SET_ALL'; transactions: Transaction[]; accounts: Account[]; categories: Category[] }
+  | { type: 'SET_ALL'; transactions: Transaction[]; accounts: Account[]; categories: Category[]; currency: string }
   | { type: 'SET_LOADING'; loading: boolean }
+  | { type: 'SET_CURRENCY'; currency: string }
   | { type: 'SET_TRANSACTIONS'; transactions: Transaction[] }
   | { type: 'UPSERT_TRANSACTION'; transaction: Transaction }
   | { type: 'DELETE_TRANSACTION'; id: string }
@@ -61,8 +65,11 @@ function reducer(state: AppState, action: AppAction): AppState {
         transactions: action.transactions,
         accounts: action.accounts,
         categories: action.categories,
+        currency: action.currency,
         loading: false,
       };
+    case 'SET_CURRENCY':
+      return { ...state, currency: action.currency };
     case 'SET_LOADING':
       return { ...state, loading: action.loading };
     case 'SET_TRANSACTIONS':
@@ -125,6 +132,7 @@ interface AppContextValue {
   addCategory: (category: Category) => Promise<void>;
   updateCategory: (category: Category) => Promise<void>;
   removeCategory: (id: string) => Promise<void>;
+  setCurrency: (symbol: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -141,6 +149,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     accounts: [],
     categories: [],
     loading: true,
+    currency: '$',
   });
 
   const { isLoaded: authLoaded, userId } = useAuth();
@@ -157,12 +166,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const loadAll = useCallback(async () => {
     await initializeStorage();
-    const [transactions, accounts, categories] = await Promise.all([
+    const [transactions, accounts, categories, currency] = await Promise.all([
       getTransactions(),
       getAccounts(),
       getCategories(),
+      getCurrency(),
     ]);
-    dispatch({ type: 'SET_ALL', transactions, accounts, categories });
+    dispatch({ type: 'SET_ALL', transactions, accounts, categories, currency });
   }, []);
 
   useEffect(() => {
@@ -334,6 +344,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'DELETE_CATEGORY', id });
   }, []);
 
+  const setCurrency = useCallback(async (symbol: string) => {
+    await saveCurrency(symbol);
+    dispatch({ type: 'SET_CURRENCY', currency: symbol });
+  }, []);
+
   return (
     <AppContext.Provider
       value={{
@@ -348,6 +363,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addCategory,
         updateCategory,
         removeCategory,
+        setCurrency,
         refresh: loadAll,
       }}
     >
