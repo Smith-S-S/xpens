@@ -13,7 +13,7 @@ import {
 } from '@/lib/format';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import AddTransactionModal from '@/components/AddTransactionModal';
-import ExportModal from '@/components/ExportModal';
+import { useSidebar } from '@/lib/SidebarContext';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
@@ -35,7 +35,7 @@ export default function RecordsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
+  const { openSidebar } = useSidebar();
 
   // Filter transactions for current month
   const monthTransactions = useMemo(() =>
@@ -196,13 +196,13 @@ export default function RecordsScreen() {
     <ScreenContainer containerClassName="bg-background">
       {/* Month Navigator */}
       <View style={[styles.monthNav, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
-        {/* Left: export + prev */}
+        {/* Left: sidebar + prev */}
         <View style={styles.navSide}>
           <Pressable
             style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.5 }]}
-            onPress={() => setShowExportModal(true)}
+            onPress={openSidebar}
           >
-            <IconSymbol name="square.and.arrow.up" size={20} color={colors.primary} />
+            <IconSymbol name="line.3.horizontal" size={22} color={colors.primary} />
           </Pressable>
           <Pressable
             style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.5 }]}
@@ -278,11 +278,6 @@ export default function RecordsScreen() {
         onSaved={() => { setShowEditModal(false); setEditingTransaction(null); }}
       />
 
-      {/* Export Modal */}
-      <ExportModal
-        visible={showExportModal}
-        onClose={() => setShowExportModal(false)}
-      />
     </ScreenContainer>
   );
 }

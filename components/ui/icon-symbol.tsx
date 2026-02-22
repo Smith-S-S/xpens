@@ -52,6 +52,9 @@ const MAPPING = {
   "arrow.clockwise": "refresh",
   "arrow.down.circle.fill": "download",
   "line.3.horizontal.decrease.circle": "filter-list",
+  "line.3.horizontal": "menu",
+  "person.fill": "person",
+  "rectangle.portrait.and.arrow.right": "logout",
 } as IconMapping;
 
 /**

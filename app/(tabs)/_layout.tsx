@@ -5,6 +5,9 @@ import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useState } from "react";
 import AddTransactionModal from "@/components/AddTransactionModal";
+import Sidebar from "@/components/Sidebar";
+import ExportModal from "@/components/ExportModal";
+import { SidebarProvider, useSidebar } from "@/lib/SidebarContext";
 import * as Haptics from "expo-haptics";
 
 function CenterAddButton({ onPress }: { onPress: () => void }) {
@@ -23,12 +26,14 @@ function CenterAddButton({ onPress }: { onPress: () => void }) {
   );
 }
 
-export default function TabLayout() {
+function TabLayoutInner() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const bottomPadding = Platform.OS === "web" ? 12 : Math.max(insets.bottom, 8);
   const tabBarHeight = 60 + bottomPadding;
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const { isSidebarOpen, closeSidebar } = useSidebar();
 
   return (
     <>
@@ -120,7 +125,26 @@ export default function TabLayout() {
         onClose={() => setShowAddModal(false)}
         onSaved={() => setShowAddModal(false)}
       />
+
+      <Sidebar
+        visible={isSidebarOpen}
+        onClose={closeSidebar}
+        onOpenExport={() => setShowExportModal(true)}
+      />
+
+      <ExportModal
+        visible={showExportModal}
+        onClose={() => setShowExportModal(false)}
+      />
     </>
+  );
+}
+
+export default function TabLayout() {
+  return (
+    <SidebarProvider>
+      <TabLayoutInner />
+    </SidebarProvider>
   );
 }
 
