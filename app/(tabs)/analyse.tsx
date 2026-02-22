@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { G, Path, Text as SvgText } from 'react-native-svg';
 import { ScreenContainer } from '@/components/screen-container';
 import { useApp } from '@/lib/AppContext';
@@ -331,8 +332,6 @@ export default function AnalyseScreen() {
     setMonth(next.month);
   };
 
-  const balanceColor = summary.balance >= 0 ? colors.income : colors.expense;
-
   return (
     <ScreenContainer containerClassName="bg-background">
       {/* Month Navigator */}
@@ -355,49 +354,93 @@ export default function AnalyseScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Summary Cards */}
-        <View style={styles.summaryCards}>
-          <View style={[styles.summaryCard, { backgroundColor: colors.income + '18', borderColor: colors.income + '40' }]}>
-            <Text style={[styles.summaryCardLabel, { color: colors.income }]}>INCOME</Text>
-            <Text style={[styles.summaryCardValue, { color: colors.income }]}>
-              {formatCurrency(summary.income)}
-            </Text>
-          </View>
-          <View style={[styles.summaryCard, { backgroundColor: colors.expense + '18', borderColor: colors.expense + '40' }]}>
-            <Text style={[styles.summaryCardLabel, { color: colors.expense }]}>EXPENSE</Text>
-            <Text style={[styles.summaryCardValue, { color: colors.expense }]}>
-              {formatCurrency(summary.expense)}
-            </Text>
-          </View>
-          <View style={[styles.summaryCard, { backgroundColor: balanceColor + '18', borderColor: balanceColor + '40' }]}>
-            <Text style={[styles.summaryCardLabel, { color: balanceColor }]}>BALANCE</Text>
-            <Text style={[styles.summaryCardValue, { color: balanceColor }]}>
-              {summary.balance >= 0 ? '+' : ''}{formatCurrency(summary.balance)}
-            </Text>
-          </View>
+        {/* ── Statistics Header ── */}
+        <View style={styles.statisticHeader}>
+          <Text style={[styles.statLabel, { color: colors.muted }]}>Total Balance</Text>
+          <Text style={[styles.statBalance, { color: colors.foreground }]}>
+            {formatCurrency(summary.balance, currency)}
+          </Text>
         </View>
 
-        {/* Type Toggle */}
-        <View style={[styles.typeToggle, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          {(['expense', 'income'] as const).map(t => (
-            <Pressable
-              key={t}
-              style={[
-                styles.typeToggleBtn,
-                activeType === t && {
-                  backgroundColor: t === 'expense' ? colors.expense : colors.income,
-                },
-              ]}
-              onPress={() => setActiveType(t)}
-            >
-              <Text style={[
-                styles.typeToggleBtnText,
-                { color: activeType === t ? '#fff' : colors.muted },
-              ]}>
-                {t.toUpperCase()}
+        {/* ── Income / Expense Cards ── */}
+        <View style={styles.statCardsRow}>
+          <LinearGradient
+            colors={['#1a3a2a', '#0d2018']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.statCard, { borderColor: colors.income + '40' }]}
+          >
+            <View style={[styles.statCardIconBg, { backgroundColor: colors.income + '25' }]}>
+              <IconSymbol name="arrow.down" size={16} color={colors.income} />
+            </View>
+            <View style={styles.statCardText}>
+              <Text style={[styles.statCardTitle, { color: colors.income + 'AA' }]}>Income</Text>
+              <Text style={[styles.statCardAmount, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>
+                {formatCurrency(summary.income, currency)}
               </Text>
-            </Pressable>
-          ))}
+            </View>
+          </LinearGradient>
+
+          <LinearGradient
+            colors={['#3a1a1a', '#200d0d']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.statCard, { borderColor: colors.expense + '40' }]}
+          >
+            <View style={[styles.statCardIconBg, { backgroundColor: colors.expense + '25' }]}>
+              <IconSymbol name="arrow.up" size={16} color={colors.expense} />
+            </View>
+            <View style={styles.statCardText}>
+              <Text style={[styles.statCardTitle, { color: colors.expense + 'AA' }]}>Outcome</Text>
+              <Text style={[styles.statCardAmount, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>
+                {formatCurrency(summary.expense, currency)}
+              </Text>
+            </View>
+          </LinearGradient>
+        </View>
+
+        {/* ── Type Toggle ── */}
+        <View style={styles.typeToggleRow}>
+          {(['expense', 'income'] as const).map(t => {
+            const isActive = activeType === t;
+            const glowColor = t === 'expense' ? colors.expense : colors.income;
+            const gradientColors: [string, string] = t === 'expense'
+              ? ['#FF6B6B', '#C0392B']
+              : ['#56FFB8', '#00C97A'];
+            return (
+              <Pressable
+                key={t}
+                style={[
+                  styles.typeToggleBtn,
+                  {
+                    borderColor: isActive ? glowColor : colors.border,
+                    shadowColor: isActive ? glowColor : 'transparent',
+                    overflow: 'hidden',
+                  },
+                ]}
+                onPress={() => setActiveType(t)}
+              >
+                {isActive ? (
+                  <LinearGradient
+                    colors={gradientColors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.typeToggleBtnGradient}
+                  >
+                    <Text style={[styles.typeToggleBtnText, { color: '#fff' }]}>
+                      {t.toUpperCase()}
+                    </Text>
+                  </LinearGradient>
+                ) : (
+                  <View style={[styles.typeToggleBtnGradient, { backgroundColor: colors.surface }]}>
+                    <Text style={[styles.typeToggleBtnText, { color: colors.muted }]}>
+                      {t.toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+            );
+          })}
         </View>
 
         {/* Flower Chart */}
@@ -502,45 +545,85 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.2,
   },
-  summaryCards: {
-    flexDirection: 'row',
-    padding: 16,
-    gap: 10,
-  },
-  summaryCard: {
-    flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 12,
+  statisticHeader: {
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 22,
+    paddingBottom: 14,
   },
-  summaryCardLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    marginBottom: 4,
+  statLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    letterSpacing: 0.3,
+    marginBottom: 6,
   },
-  summaryCardValue: {
-    fontSize: 14,
+  statBalance: {
+    fontSize: 40,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  statCardsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 12,
+    marginBottom: 14,
+  },
+  statCard: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  statCardIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  statCardText: {
+    flex: 1,
+  },
+  statCardTitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginBottom: 3,
+  },
+  statCardAmount: {
+    fontSize: 16,
     fontWeight: '800',
   },
-  typeToggle: {
+  typeToggleRow: {
     flexDirection: 'row',
     marginHorizontal: 16,
-    borderRadius: 10,
-    borderWidth: 1,
-    overflow: 'hidden',
+    gap: 8,
     marginBottom: 8,
   },
   typeToggleBtn: {
     flex: 1,
-    paddingVertical: 10,
     alignItems: 'center',
+    borderRadius: 30,
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.75,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  typeToggleBtnGradient: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 11,
   },
   typeToggleBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   chartContainer: {
     alignItems: 'center',
