@@ -121,60 +121,60 @@ export default function RecordsScreen() {
       style={[styles.deleteAction, { backgroundColor: colors.expense }]}
       onPress={() => handleDelete(transaction)}
     >
-      <IconSymbol name="trash.fill" size={22} color="#fff" />
+      <IconSymbol name="trash.fill" size={20} color="#fff" />
       <Text style={styles.deleteActionText}>Delete</Text>
     </Pressable>
   ), [colors.expense, handleDelete]);
 
   const renderTransaction = useCallback(({ item }: { item: Transaction }) => {
     const category = getCategoryById(item.categoryId);
-    const account = getAccountById(item.accountId);
-    const amountColor = item.type === 'income' ? colors.income
-      : item.type === 'expense' ? colors.expense
-      : colors.transfer;
+    const account  = getAccountById(item.accountId);
+    const amountColor = item.type === 'income'  ? colors.income
+                      : item.type === 'expense' ? colors.expense
+                      : colors.transfer;
     const amountPrefix = item.type === 'income' ? '+' : item.type === 'expense' ? '-' : '';
 
     return (
-      <ReanimatedSwipeable
-        renderRightActions={() => renderRightActions(item)}
-        overshootRight={false}
-      >
-        <Pressable
-          style={({ pressed }) => [
-            styles.transactionRow,
-            { backgroundColor: colors.background },
-            pressed && { opacity: 0.7 },
-          ]}
-          onPress={() => handleEditTransaction(item)}
+      <View style={styles.txCardWrapper}>
+        <ReanimatedSwipeable
+          renderRightActions={() => renderRightActions(item)}
+          overshootRight={false}
         >
-          <View style={[styles.categoryIcon, { backgroundColor: category?.color + '20' || '#eee' }]}>
-            <Text style={styles.categoryEmoji}>{category?.icon || '💸'}</Text>
-          </View>
-          <View style={styles.transactionInfo}>
-            <Text style={[styles.transactionName, { color: colors.foreground }]}>
-              {category?.name || 'Unknown'}
+          <Pressable
+            style={({ pressed }) => [
+              styles.txCard,
+              { backgroundColor: colors.surface },
+              pressed && { opacity: 0.75 },
+            ]}
+            onPress={() => handleEditTransaction(item)}
+          >
+            <View style={[styles.categoryIcon, { backgroundColor: (category?.color ?? '#888') + '28' }]}>
+              <Text style={styles.categoryEmoji}>{category?.icon || '💸'}</Text>
+            </View>
+            <View style={styles.transactionInfo}>
+              <Text style={[styles.transactionName, { color: colors.foreground }]}>
+                {category?.name || 'Unknown'}
+              </Text>
+              <Text style={[styles.transactionSub, { color: colors.muted }]}>
+                {account?.name || '—'}{item.note ? ` · ${item.note}` : ''}
+              </Text>
+            </View>
+            <Text style={[styles.transactionAmount, { color: amountColor }]}>
+              {amountPrefix}{formatCurrency(item.amount)}
             </Text>
-            <Text style={[styles.transactionSub, { color: colors.muted }]}>
-              {account?.name || '—'}{item.note ? ` · ${item.note}` : ''}
-            </Text>
-          </View>
-          <Text style={[styles.transactionAmount, { color: amountColor }]}>
-            {amountPrefix}{formatCurrency(item.amount)}
-          </Text>
-        </Pressable>
-      </ReanimatedSwipeable>
+          </Pressable>
+        </ReanimatedSwipeable>
+      </View>
     );
   }, [colors, getCategoryById, getAccountById, handleEditTransaction, renderRightActions]);
 
   const renderDateGroup = useCallback(({ item }: { item: DateGroup }) => (
     <View>
-      <View style={[styles.dateHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <Text style={[styles.dateHeaderText, { color: colors.muted }]}>
-          {formatDateHeader(item.date)}
-        </Text>
-      </View>
+      <Text style={[styles.dateHeaderText, { color: colors.muted }]}>
+        {formatDateHeader(item.date)}
+      </Text>
       {item.transactions.map(tx => (
-        <View key={tx.id} style={{ borderBottomWidth: 0.5, borderBottomColor: colors.border }}>
+        <View key={tx.id}>
           {renderTransaction({ item: tx })}
         </View>
       ))}
@@ -235,13 +235,18 @@ export default function RecordsScreen() {
         renderItem={renderDateGroup}
         ListEmptyComponent={renderEmpty}
         ListHeaderComponent={
-          <BalanceSummaryChart
-            year={year}
-            month={month}
-            transactions={state.transactions}
-            summary={summary}
-            currency={state.currency}
-          />
+          <>
+            <BalanceSummaryChart
+              year={year}
+              month={month}
+              transactions={state.transactions}
+              summary={summary}
+              currency={state.currency}
+            />
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+              Recent Transactions
+            </Text>
+          </>
         }
         refreshControl={
           <RefreshControl
@@ -296,27 +301,37 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
-  dateHeader: {
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderBottomWidth: 0.5,
+    paddingTop: 20,
+    paddingBottom: 8,
   },
   dateHeaderText: {
     fontSize: 12,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 6,
   },
-  transactionRow: {
+  txCardWrapper: {
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  txCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 14,
+    borderRadius: 14,
   },
   categoryIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -343,8 +358,10 @@ const styles = StyleSheet.create({
   deleteAction: {
     justifyContent: 'center',
     alignItems: 'center',
-    width: 80,
-    paddingHorizontal: 12,
+    width: 76,
+    marginVertical: 4,
+    marginRight: 16,
+    borderRadius: 14,
   },
   deleteActionText: {
     color: '#fff',
