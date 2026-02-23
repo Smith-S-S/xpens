@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, PanResponder, LayoutChangeEvent,
+  View, Text, StyleSheet, PanResponder, ScrollView,
 } from 'react-native';
 import Svg, {
   Defs, LinearGradient, Stop,
@@ -18,9 +18,11 @@ import {
 
 interface DailyPoint {
   day: number;
-  cumulative: number;
+  amount: number;   // expense for that specific day
   hasData: boolean;
 }
+
+const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 export interface BalanceSummaryChartProps {
   year: number;
@@ -32,79 +34,96 @@ export interface BalanceSummaryChartProps {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+const DAY_WIDTH    = 50;   // px per day column — ~7-8 days visible at once
 const CHART_HEIGHT = 110;
-const PADDING_V = 16;
+const PADDING_V    = 14;
+const AXIS_HEIGHT  = 32;   // two lines: day number + month abbrev
+const TOTAL_H      = CHART_HEIGHT + PADDING_V * 2 + AXIS_HEIGHT;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function BalanceSummaryChart({
   year, month, transactions, summary, currency,
 }: BalanceSummaryChartProps) {
-  const colors = useColors();
+  const colors  = useColors();
+  const gradId  = useRef('balGrad_' + Math.random().toString(36).slice(2)).current;
+  const scrollRef = useRef<ScrollView>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const [chartWidth, setChartWidth] = useState(0);
-  const gradId = useRef('balGrad_' + Math.random().toString(36).slice(2)).current;
-  const chartWidthRef = useRef(0);
 
-  // ── Daily cumulative points ──────────────────────────────────────────────
+  // ── Daily spending points (expense per day, last 15 days up to today) ────
   const dailyPoints = useMemo((): DailyPoint[] => {
-    const daysCount = getDaysInMonth(year, month);
-    const dailyNet: Record<number, number> = {};
+    const today     = new Date();
+    const todayYear = today.getFullYear();
+    const todayMonth = today.getMonth() + 1;
+    const todayDay  = today.getDate();
+
+    // Cap at today for the current month; otherwise use all days of the month
+    const isCurrentMonth = year === todayYear && month === todayMonth;
+    const daysCount = isCurrentMonth ? todayDay : getDaysInMonth(year, month);
+
+    const dailyExpense: Record<number, number> = {};
     for (const t of transactions) {
       if (!isSameMonth(t.date, year, month)) continue;
+      if (t.type !== 'expense') continue;
       const day = parseInt(t.date.split('-')[2], 10);
-      if (!dailyNet[day]) dailyNet[day] = 0;
-      if (t.type === 'income') dailyNet[day] += t.amount;
-      else if (t.type === 'expense') dailyNet[day] -= t.amount;
+      dailyExpense[day] = (dailyExpense[day] ?? 0) + t.amount;
     }
     const points: DailyPoint[] = [];
-    let running = 0;
     for (let d = 1; d <= daysCount; d++) {
-      running += dailyNet[d] ?? 0;
-      points.push({ day: d, cumulative: running, hasData: d in dailyNet });
+      points.push({ day: d, amount: dailyExpense[d] ?? 0, hasData: d in dailyExpense });
     }
-    return points;
+    // Keep last 15 days
+    return points.slice(-15);
   }, [transactions, year, month]);
 
-  // ── Previous month % change ──────────────────────────────────────────────
+  // Auto-scroll to end (most recent day) whenever data changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: false });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [dailyPoints]);
+
+  // ── Previous month % change (expense vs expense) ────────────────────────
   const pctChange = useMemo(() => {
     const prev = navigateMonth(year, month, -1);
-    let prevIncome = 0, prevExpense = 0;
+    let prevExpense = 0;
     for (const t of transactions) {
       if (!isSameMonth(t.date, prev.year, prev.month)) continue;
-      if (t.type === 'income') prevIncome += t.amount;
-      else if (t.type === 'expense') prevExpense += t.amount;
+      if (t.type === 'expense') prevExpense += t.amount;
     }
-    const prevNet = prevIncome - prevExpense;
-    const currentNet = summary.total;
-    if (prevNet === 0) {
-      return { value: null, isPositive: currentNet >= 0, label: 'New' };
+    const currentExpense = summary.expense;
+    if (prevExpense === 0) {
+      return { value: null, isPositive: false, label: 'New' };
     }
-    const pct = ((currentNet - prevNet) / Math.abs(prevNet)) * 100;
+    const pct = ((currentExpense - prevExpense) / prevExpense) * 100;
+    // Spending up = bad (red ↑), spending down = good (green ↓)
     return {
       value: Math.abs(pct),
-      isPositive: pct >= 0,
+      isPositive: pct <= 0,   // less spending this month = positive
       label: `${Math.abs(pct).toFixed(1)}%`,
     };
-  }, [transactions, year, month, summary.total]);
+  }, [transactions, year, month, summary.expense]);
 
   // ── SVG paths ─────────────────────────────────────────────────────────────
   const svgData = useMemo(() => {
-    if (chartWidth === 0 || dailyPoints.length < 2) return null;
     const N = dailyPoints.length;
-    const cumulatives = dailyPoints.map(p => p.cumulative);
-    const yMin = Math.min(...cumulatives, 0);
-    const yMax = Math.max(...cumulatives, 0);
-    const yRange = yMax - yMin || 1;
-    const totalH = CHART_HEIGHT + PADDING_V * 2;
+    if (N < 2) return null;
 
-    const svgX = (i: number) => (i / (N - 1)) * chartWidth;
+    const totalWidth = N * DAY_WIDTH;
+    const amounts    = dailyPoints.map(p => p.amount);
+    const yMin   = 0;
+    const yMax   = Math.max(...amounts, 1);
+    const yRange = yMax - yMin;
+
+    // Center each point in its column
+    const svgX = (i: number) => i * DAY_WIDTH + DAY_WIDTH / 2;
     const svgY = (val: number) =>
       PADDING_V + (1 - (val - yMin) / yRange) * CHART_HEIGHT;
 
     const zeroY = svgY(0);
     const xs = dailyPoints.map((_, i) => svgX(i));
-    const ys = dailyPoints.map(p => svgY(p.cumulative));
+    const ys = dailyPoints.map(p => svgY(p.amount));
 
     // Catmull-Rom → cubic bezier smooth curve
     let linePath = `M ${xs[0].toFixed(2)} ${ys[0].toFixed(2)}`;
@@ -131,14 +150,14 @@ export default function BalanceSummaryChart({
       ` L ${xs[N - 1].toFixed(2)} ${zeroY.toFixed(2)}` +
       ` L ${xs[0].toFixed(2)} ${zeroY.toFixed(2)} Z`;
 
-    return { xs, ys, zeroY, linePath, areaPath, totalH };
-  }, [chartWidth, dailyPoints]);
+    return { xs, ys, zeroY, linePath, areaPath, totalWidth };
+  }, [dailyPoints]);
 
-  // ── Touch ─────────────────────────────────────────────────────────────────
+  // ── Touch (PanResponder on inner content view) ─────────────────────────────
   const updateActive = (x: number) => {
-    const w = chartWidthRef.current;
-    if (w === 0 || dailyPoints.length === 0) return;
-    const idx = Math.round((x / w) * (dailyPoints.length - 1));
+    if (dailyPoints.length === 0 || !svgData) return;
+    // x is absolute within the full-width content view
+    const idx = Math.round((x - DAY_WIDTH / 2) / DAY_WIDTH);
     setActiveIndex(Math.max(0, Math.min(idx, dailyPoints.length - 1)));
   };
 
@@ -146,28 +165,23 @@ export default function BalanceSummaryChart({
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > Math.abs(g.dy),
-      onPanResponderGrant: (evt) => updateActive(evt.nativeEvent.locationX),
-      onPanResponderMove: (evt) => updateActive(evt.nativeEvent.locationX),
-      onPanResponderRelease: () => setActiveIndex(null),
-      onPanResponderTerminate: () => setActiveIndex(null),
+      onPanResponderGrant:    (evt) => updateActive(evt.nativeEvent.locationX),
+      onPanResponderMove:     (evt) => updateActive(evt.nativeEvent.locationX),
+      onPanResponderRelease:  () => setActiveIndex(null),
+      onPanResponderTerminate:() => setActiveIndex(null),
     })
   ).current;
 
-  const handleLayout = (e: LayoutChangeEvent) => {
-    const w = e.nativeEvent.layout.width;
-    chartWidthRef.current = w;
-    setChartWidth(w);
-  };
-
   // ── Derived display values ─────────────────────────────────────────────────
-  const activePoint = activeIndex !== null ? dailyPoints[activeIndex] : null;
-  const activeX = svgData && activeIndex !== null ? svgData.xs[activeIndex] : null;
-  const activeY = svgData && activeIndex !== null ? svgData.ys[activeIndex] : null;
+  const activePoint = activeIndex !== null ? dailyPoints[activeIndex]     : null;
+  const activeX     = svgData && activeIndex !== null ? svgData.xs[activeIndex] : null;
+  const activeY     = svgData && activeIndex !== null ? svgData.ys[activeIndex] : null;
+  const monthAbbrev = SHORT_MONTHS[month - 1];
 
-  const tooltipWidth = 100;
-  const tooltipLeft =
-    activeX !== null
-      ? Math.max(8, Math.min(activeX - tooltipWidth / 2, chartWidth - tooltipWidth - 8))
+  const tooltipWidth = 108;
+  const tooltipLeft  =
+    activeX !== null && svgData
+      ? Math.max(4, Math.min(activeX - tooltipWidth / 2, svgData.totalWidth - tooltipWidth - 4))
       : 0;
 
   const tooltipDate = activePoint
@@ -177,59 +191,62 @@ export default function BalanceSummaryChart({
     : '';
 
   const pctArrow = pctChange.isPositive ? '↑' : '↓';
-  const pctLabel =
-    pctChange.value !== null
-      ? `${pctArrow} ${pctChange.label}`
-      : `${pctArrow} New`;
+  const pctLabel = pctChange.value !== null ? `${pctArrow} ${pctChange.label}` : `${pctArrow} New`;
   const pctColor =
     pctChange.value !== null
       ? pctChange.isPositive ? colors.income : colors.expense
       : colors.muted;
 
-  const isEmpty = dailyPoints.every(p => p.cumulative === 0);
-  const totalH = svgData?.totalH ?? CHART_HEIGHT + PADDING_V * 2;
+  const isEmpty     = dailyPoints.every(p => p.amount === 0);
+  const totalWidth  = svgData?.totalWidth ?? dailyPoints.length * DAY_WIDTH;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={[styles.title, { color: colors.foreground }]}>Your Balance</Text>
-          <Text style={[styles.subtitle, { color: colors.muted }]}>Net Balance</Text>
+          <Text style={[styles.title,    { color: colors.foreground }]}>Your Expense</Text>
+          <Text style={[styles.subtitle, { color: colors.muted }]}>Daily Spending</Text>
         </View>
         <View style={styles.headerRight}>
           <Text style={[styles.amount, { color: colors.foreground }]}>
-            {formatCurrency(summary.total, currency)}
+            {formatCurrency(summary.expense, currency)}
           </Text>
           <Text style={[styles.pct, { color: pctColor }]}>{pctLabel}</Text>
         </View>
       </View>
 
-      {/* Chart */}
-      <View
-        onLayout={handleLayout}
-        {...panResponder.panHandlers}
-        style={[styles.chartArea, { height: totalH }]}
+      {/* Scrollable chart */}
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={16}
+        bounces={false}
       >
-        {chartWidth > 0 && (
-          <Svg width={chartWidth} height={totalH}>
+        {/* Full-width content — PanResponder lives here */}
+        <View
+          style={{ width: totalWidth, height: TOTAL_H, position: 'relative' }}
+          {...panResponder.panHandlers}
+        >
+          <Svg width={totalWidth} height={TOTAL_H}>
             <Defs>
               <LinearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0%" stopColor={colors.primary} stopOpacity={0.4} />
-                <Stop offset="100%" stopColor={colors.primary} stopOpacity={0} />
+                <Stop offset="0%"   stopColor={colors.primary} stopOpacity={0.45} />
+                <Stop offset="100%" stopColor={colors.primary} stopOpacity={0}    />
               </LinearGradient>
             </Defs>
 
             {isEmpty ? (
               <>
                 <Line
-                  x1={0} y1={totalH / 2}
-                  x2={chartWidth} y2={totalH / 2}
-                  stroke={colors.border} strokeWidth={1.5}
-                  strokeDasharray="6 4"
+                  x1={0}          y1={PADDING_V + CHART_HEIGHT / 2}
+                  x2={totalWidth} y2={PADDING_V + CHART_HEIGHT / 2}
+                  stroke={colors.border} strokeWidth={1.5} strokeDasharray="6 4"
                 />
                 <SvgText
-                  x={chartWidth / 2} y={totalH / 2 - 10}
+                  x={totalWidth / 2}
+                  y={PADDING_V + CHART_HEIGHT / 2 - 10}
                   textAnchor="middle"
                   fill={colors.muted}
                   fontSize={12}
@@ -241,63 +258,82 @@ export default function BalanceSummaryChart({
               <>
                 {/* Zero baseline */}
                 <Line
-                  x1={0} y1={svgData.zeroY}
-                  x2={chartWidth} y2={svgData.zeroY}
-                  stroke={colors.border} strokeWidth={0.5}
-                  strokeDasharray="4 4"
+                  x1={0} y1={svgData.zeroY} x2={totalWidth} y2={svgData.zeroY}
+                  stroke={colors.border} strokeWidth={0.5} strokeDasharray="4 4"
                 />
                 {/* Area fill */}
                 <Path d={svgData.areaPath} fill={`url(#${gradId})`} />
                 {/* Line stroke */}
                 <Path
                   d={svgData.linePath}
-                  stroke={colors.primary}
-                  strokeWidth={2}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                  stroke={colors.primary} strokeWidth={2.5}
+                  fill="none" strokeLinecap="round" strokeLinejoin="round"
                 />
                 {/* Active vertical line */}
                 {activeX !== null && (
                   <Line
-                    x1={activeX} y1={0}
-                    x2={activeX} y2={totalH}
-                    stroke="rgba(255,255,255,0.15)"
-                    strokeWidth={1}
+                    x1={activeX} y1={0} x2={activeX} y2={TOTAL_H}
+                    stroke="rgba(255,255,255,0.12)" strokeWidth={1}
                   />
                 )}
                 {/* Active dot */}
                 {activeX !== null && activeY !== null && (
                   <Circle
                     cx={activeX} cy={activeY}
-                    r={5} fill="#FFFFFF"
-                    stroke={colors.primary} strokeWidth={2}
+                    r={5} fill="#FFFFFF" stroke={colors.primary} strokeWidth={2}
                   />
                 )}
+                {/* X-axis labels: day number + month abbreviation */}
+                {dailyPoints.map((p, i) => {
+                  const isActive = activeIndex === i;
+                  const labelColor = isActive ? colors.primary : colors.muted;
+                  const labelWeight = isActive ? '700' : '400';
+                  const baseY = PADDING_V + CHART_HEIGHT + 14;
+                  return (
+                    <React.Fragment key={p.day}>
+                      <SvgText
+                        x={svgData.xs[i]} y={baseY}
+                        textAnchor="middle"
+                        fill={labelColor} fontSize={11}
+                        fontWeight={labelWeight}
+                      >
+                        {p.day}
+                      </SvgText>
+                      <SvgText
+                        x={svgData.xs[i]} y={baseY + 14}
+                        textAnchor="middle"
+                        fill={labelColor} fontSize={9}
+                        fontWeight={labelWeight}
+                      >
+                        {monthAbbrev}
+                      </SvgText>
+                    </React.Fragment>
+                  );
+                })}
               </>
             ) : null}
           </Svg>
-        )}
 
-        {/* Tooltip overlay */}
-        {activePoint && svgData && (
-          <View
-            style={[
-              styles.tooltip,
-              {
-                left: tooltipLeft,
-                backgroundColor: colors.background,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <Text style={[styles.tooltipDate, { color: colors.muted }]}>{tooltipDate}</Text>
-            <Text style={[styles.tooltipAmount, { color: colors.foreground }]}>
-              {formatCurrency(activePoint.cumulative, currency)}
-            </Text>
-          </View>
-        )}
-      </View>
+          {/* Tooltip overlay */}
+          {activePoint && svgData && (
+            <View
+              style={[
+                styles.tooltip,
+                {
+                  left: tooltipLeft,
+                  backgroundColor: colors.background,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.tooltipDate,   { color: colors.muted }]}>{tooltipDate}</Text>
+              <Text style={[styles.tooltipAmount,  { color: colors.foreground }]}>
+                {formatCurrency(activePoint.amount, currency)}
+              </Text>
+            </View>
+          )}
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -340,9 +376,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2,
   },
-  chartArea: {
-    position: 'relative',
-  },
   tooltip: {
     position: 'absolute',
     top: 6,
@@ -350,7 +383,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderWidth: 0.5,
-    width: 100,
+    width: 108,
   },
   tooltipDate: {
     fontSize: 10,

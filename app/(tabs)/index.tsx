@@ -191,8 +191,6 @@ export default function RecordsScreen() {
     </View>
   );
 
-  const totalColor = summary.total >= 0 ? colors.income : colors.expense;
-
   return (
     <ScreenContainer containerClassName="bg-background">
       {/* Month Navigator */}
@@ -227,30 +225,6 @@ export default function RecordsScreen() {
             <IconSymbol name="chevron.right" size={22} color={colors.primary} />
           </Pressable>
           <View style={styles.navPlaceholder} />
-        </View>
-      </View>
-
-      {/* Summary Bar */}
-      <View style={[styles.summaryBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <View style={styles.summaryItem}>
-          <Text style={[styles.summaryLabel, { color: colors.muted }]}>Income</Text>
-          <Text style={[styles.summaryValue, { color: colors.income }]}>
-            {formatCurrency(summary.income)}
-          </Text>
-        </View>
-        <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.summaryItem}>
-          <Text style={[styles.summaryLabel, { color: colors.muted }]}>Expense</Text>
-          <Text style={[styles.summaryValue, { color: colors.expense }]}>
-            {formatCurrency(summary.expense)}
-          </Text>
-        </View>
-        <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.summaryItem}>
-          <Text style={[styles.summaryLabel, { color: colors.muted }]}>Total</Text>
-          <Text style={[styles.summaryValue, { color: totalColor }]}>
-            {summary.total >= 0 ? '+' : ''}{formatCurrency(summary.total)}
-          </Text>
         </View>
       </View>
 
@@ -321,32 +295,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
     flex: 1,
     textAlign: 'center',
-  },
-  summaryBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    borderBottomWidth: 0.5,
-  },
-  summaryItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  summaryLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 3,
-  },
-  summaryValue: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  summaryDivider: {
-    width: 0.5,
-    height: 32,
   },
   dateHeader: {
     paddingHorizontal: 16,
