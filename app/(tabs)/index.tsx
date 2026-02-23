@@ -13,6 +13,7 @@ import {
 } from '@/lib/format';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import AddTransactionModal from '@/components/AddTransactionModal';
+import BalanceSummaryChart from '@/components/BalanceSummaryChart';
 import { useSidebar } from '@/lib/SidebarContext';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import * as Haptics from 'expo-haptics';
@@ -259,6 +260,15 @@ export default function RecordsScreen() {
         keyExtractor={item => item.date}
         renderItem={renderDateGroup}
         ListEmptyComponent={renderEmpty}
+        ListHeaderComponent={
+          <BalanceSummaryChart
+            year={year}
+            month={month}
+            transactions={state.transactions}
+            summary={summary}
+            currency={state.currency}
+          />
+        }
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
