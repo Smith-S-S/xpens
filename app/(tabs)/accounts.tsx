@@ -1,8 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, Pressable, Alert,
-  StyleSheet, Modal, TextInput, ScrollView, Platform,
+  StyleSheet, Modal, TextInput, ScrollView, Platform, Image,
 } from 'react-native';
+import { useUser } from '@clerk/clerk-expo';
 import { ScreenContainer } from '@/components/screen-container';
 import { useApp } from '@/lib/AppContext';
 import { useColors } from '@/hooks/use-colors';
@@ -224,6 +225,7 @@ function AccountFormModal({
 
 export default function AccountsScreen() {
   const colors = useColors();
+  const { user } = useUser();
   const { accountsWithBalance, removeAccount } = useApp();
   const [showForm, setShowForm] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
@@ -231,6 +233,47 @@ export default function AccountsScreen() {
   const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>();
 
   const totalBalance = accountsWithBalance.reduce((s, a) => s + a.balance, 0);
+
+  const cardDate = useMemo(() => {
+    const now = new Date();
+    return `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getFullYear()).slice(-2)}`;
+  }, []);
+
+  const displayBalance = useMemo(() => {
+    const formatted = formatCurrency(totalBalance);
+    const digits = (formatted.match(/\d/g) || []).length;
+    if (digits <= 8) return formatted;
+    let seen = 0;
+    for (let i = 0; i < formatted.length; i++) {
+      if (/\d/.test(formatted[i])) seen++;
+      if (seen === 8) return formatted.slice(0, i + 1) + '..';
+    }
+    return formatted;
+  }, [totalBalance]);
+
+  // ── Dynamic overlay positioning ───────────────────────────────────────────
+  const [cardLayout, setCardLayout] = useState({ width: 0, height: 0 });
+  // card_design.png native size
+  const IMG_W = 597, IMG_H = 427;
+  // Red card bounds in image-native pixels (measured from PNG)
+  // Red card: left ~200, top ~55, right ~415, bottom ~375
+  const CONTENT_X = 160, CONTENT_Y = 105, CONTENT_H = 320;
+
+  const overlayPos = useMemo(() => {
+    const { width, height } = cardLayout;
+    if (!width || !height) return null;
+    const scale = Math.min(width / IMG_W, height / IMG_H);
+    const rendW = IMG_W * scale;
+    const rendH = IMG_H * scale;
+    const ox = (width - rendW) / 2;   // horizontal letterbox offset
+    const oy = (height - rendH) / 2;  // vertical letterbox offset
+    return {
+      left:   ox + CONTENT_X * scale,
+      top:    oy + CONTENT_Y * scale,
+      height: CONTENT_H * scale,
+      width:  185 * scale,  // usable text width within red card
+    };
+  }, [cardLayout]);
 
   const handleLongPress = useCallback((account: Account) => {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -294,10 +337,53 @@ export default function AccountsScreen() {
 
   return (
     <ScreenContainer containerClassName="bg-background">
-      {/* Total Balance Header */}
-      <View style={[styles.totalHeader, { backgroundColor: colors.primary }]}>
-        <Text style={styles.totalLabel}>Total Balance</Text>
-        <Text style={styles.totalAmount}>{formatCurrency(totalBalance)}</Text>
+      {/* Credit Card PNG + value overlay */}
+      <View
+        style={styles.cardSection}
+        onLayout={e => setCardLayout({
+          width: e.nativeEvent.layout.width,
+          height: e.nativeEvent.layout.height,
+        })}
+      >
+        <Image
+          source={require('@/assets/images/card_design.png')}
+          style={styles.cardBgImage}
+          resizeMode="contain"
+        />
+
+        {/* ··· menu — top-right */}
+        <Pressable
+          style={({ pressed }) => [styles.cardMenuBtn, { opacity: pressed ? 0.6 : 1 }]}
+          onPress={() => { setEditingAccount(null); setShowForm(true); }}
+        >
+          <Text style={[styles.cardMenuText, { color: colors.muted }]}>•••</Text>
+        </Pressable>
+
+        {/* Text overlay — position computed from actual image render bounds */}
+        {overlayPos && (
+          <View
+            style={[styles.cardOverlay, overlayPos]}
+            pointerEvents="none"
+          >
+            <View>
+              <Text
+                style={styles.cardTotalAmount}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.4}
+              >
+                {displayBalance}
+              </Text>
+              <Text style={styles.cardTotalLabel}>Total Balance</Text>
+            </View>
+            <View style={{ position: 'relative' }}>
+              <Text style={styles.cardHolderName} numberOfLines={1}>
+                {user?.fullName ?? 'My Wallet'}
+              </Text>
+              <Text style={styles.cardDate}>{cardDate}</Text>
+            </View>
+          </View>
+        )}
       </View>
 
       <FlatList
@@ -339,21 +425,62 @@ export default function AccountsScreen() {
 }
 
 const styles = StyleSheet.create({
-  totalHeader: {
-    paddingVertical: 28,
-    alignItems: 'center',
+  cardSection: {
+    height: 320,
+    marginHorizontal: 16,
+    marginTop: 2,
+    marginBottom: 8,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  totalLabel: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    marginBottom: 6,
+  cardBgImage: {
+    width: '100%',
+    height: '100%',
   },
-  totalAmount: {
-    color: '#fff',
-    fontSize: 36,
+  cardMenuBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 0,
+    padding: 8,
+    zIndex: 10,
+  },
+  cardMenuText: {
+    fontSize: 16,
+    letterSpacing: 2,
+  },
+  // Text overlay — left/top/height/width set dynamically via overlayPos
+  cardOverlay: {
+    position: 'absolute',
+    justifyContent: 'space-between',
+    paddingTop: 10,
+    paddingBottom: 110,
+  },
+  cardTotalAmount: {
+    color: '#FFFFFF',
+    fontSize: 20,
     fontWeight: '800',
+    marginBottom: 2,
+  },
+  cardTotalLabel: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 19,
+  },
+  cardHolderName: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 11,
+    fontWeight: '600',
+    maxWidth: 165,
+    marginLeft: 22,
+  },
+  cardDate: {
+    position: 'absolute',
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 10,
+    fontWeight: '500',
+    left: 175,
+    bottom: 64,
   },
   listContent: {
     padding: 16,
