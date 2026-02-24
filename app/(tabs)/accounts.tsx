@@ -381,6 +381,9 @@ export default function AccountsScreen() {
                 {user?.fullName ?? 'My Wallet'}
               </Text>
               <Text style={styles.cardDate}>{cardDate}</Text>
+              <Text style={styles.cardUserLabel} numberOfLines={1}>
+                {user?.fullName ?? 'xxx'}
+              </Text>
             </View>
           </View>
         )}
@@ -481,6 +484,14 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     left: 175,
     bottom: 64,
+  },
+  cardUserLabel: {
+    position: 'absolute',
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 22,
+    fontWeight: '500',
+    left: 165,
+    bottom: -15,
   },
   listContent: {
     padding: 16,
