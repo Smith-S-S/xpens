@@ -265,13 +265,24 @@ export default function AccountsScreen() {
     const scale = Math.min(width / IMG_W, height / IMG_H);
     const rendW = IMG_W * scale;
     const rendH = IMG_H * scale;
-    const ox = (width - rendW) / 2;   // horizontal letterbox offset
-    const oy = (height - rendH) / 2;  // vertical letterbox offset
+    const ox = (width - rendW) / 2;
+    const oy = (height - rendH) / 2;
+    const s = (n: number) => Math.round(n * scale);
     return {
-      left:   ox + CONTENT_X * scale,
-      top:    oy + CONTENT_Y * scale,
-      height: CONTENT_H * scale,
-      width:  185 * scale,  // usable text width within red card
+      // container bounds
+      left:   ox + s(CONTENT_X),
+      top:    oy + s(CONTENT_Y),
+      height: s(CONTENT_H),
+      width:  s(185),
+      paddingTop:    s(10),
+      paddingBottom: s(145),
+      // text element offsets — all scale with the image
+      labelML: s(19),
+      nameML:  s(25),
+      dateL:   s(245),
+      dateB:   s(104),
+      userL:   s(215),
+      userB:   s(0),
     };
   }, [cardLayout]);
 
@@ -362,7 +373,11 @@ export default function AccountsScreen() {
         {/* Text overlay — position computed from actual image render bounds */}
         {overlayPos && (
           <View
-            style={[styles.cardOverlay, overlayPos]}
+            style={[styles.cardOverlay, {
+              left: overlayPos.left, top: overlayPos.top,
+              height: overlayPos.height, width: overlayPos.width,
+              paddingTop: overlayPos.paddingTop, paddingBottom: overlayPos.paddingBottom,
+            }]}
             pointerEvents="none"
           >
             <View>
@@ -374,14 +389,14 @@ export default function AccountsScreen() {
               >
                 {displayBalance}
               </Text>
-              <Text style={styles.cardTotalLabel}>Total Balance</Text>
+              <Text style={[styles.cardTotalLabel, { marginLeft: overlayPos.labelML }]}>Total Balance</Text>
             </View>
             <View style={{ position: 'relative' }}>
-              <Text style={styles.cardHolderName} numberOfLines={1}>
+              <Text style={[styles.cardHolderName, { marginLeft: overlayPos.nameML }]} numberOfLines={1}>
                 {user?.fullName ?? 'My Wallet'}
               </Text>
-              <Text style={styles.cardDate}>{cardDate}</Text>
-              <Text style={styles.cardUserLabel} numberOfLines={1}>
+              <Text style={[styles.cardDate, { left: overlayPos.dateL, bottom: overlayPos.dateB }]}>{cardDate}</Text>
+              <Text style={[styles.cardUserLabel, { left: overlayPos.userL, bottom: overlayPos.userB }]} numberOfLines={1}>
                 {user?.fullName ?? 'xxx'}
               </Text>
             </View>
@@ -455,8 +470,6 @@ const styles = StyleSheet.create({
   cardOverlay: {
     position: 'absolute',
     justifyContent: 'space-between',
-    paddingTop: 10,
-    paddingBottom: 110,
   },
   cardTotalAmount: {
     color: '#FFFFFF',
@@ -468,30 +481,24 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.8)',
     fontSize: 13,
     fontWeight: '600',
-    marginLeft: 19,
   },
   cardHolderName: {
     color: 'rgba(255,255,255,0.85)',
     fontSize: 11,
     fontWeight: '600',
     maxWidth: 165,
-    marginLeft: 22,
   },
   cardDate: {
     position: 'absolute',
     color: 'rgba(255,255,255,0.75)',
     fontSize: 10,
     fontWeight: '500',
-    left: 175,
-    bottom: 64,
   },
   cardUserLabel: {
     position: 'absolute',
     color: 'rgba(255,255,255,0.7)',
-    fontSize: 22,
-    fontWeight: '500',
-    left: 165,
-    bottom: -15,
+    fontSize: 17,
+    fontWeight: '600',
   },
   listContent: {
     padding: 16,
