@@ -38,6 +38,8 @@ function CategoryFormModal({
   const [icon, setIcon] = useState('🛒');
   const [color, setColor] = useState(CATEGORY_COLORS[0]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customEmojiValue, setCustomEmojiValue] = useState('');
 
   React.useEffect(() => {
     if (!visible) return;
@@ -53,6 +55,8 @@ function CategoryFormModal({
       setColor(CATEGORY_COLORS[0]);
     }
     setErrors({});
+    setShowCustomInput(false);
+    setCustomEmojiValue('');
   }, [visible, category, defaultType]);
 
   const validate = () => {
@@ -146,6 +150,21 @@ function CategoryFormModal({
               {/* Icon Picker */}
               <Text style={[styles.fieldLabel, { color: colors.muted }]}>Icon</Text>
               <View style={styles.iconGrid}>
+                {/* Custom emoji "+" button */}
+                <Pressable
+                  style={[
+                    styles.iconOption,
+                    styles.addEmojiBtn,
+                    { borderColor: colors.primary },
+                    showCustomInput && { backgroundColor: colors.primary + '20', borderWidth: 2 },
+                  ]}
+                  onPress={() => {
+                    setShowCustomInput(v => !v);
+                    setCustomEmojiValue('');
+                  }}
+                >
+                  <Text style={{ fontSize: 20, color: colors.primary }}>+</Text>
+                </Pressable>
                 {CATEGORY_ICONS.map(ic => (
                   <Pressable
                     key={ic}
@@ -160,6 +179,32 @@ function CategoryFormModal({
                   </Pressable>
                 ))}
               </View>
+              {showCustomInput && (
+                <View style={styles.customEmojiRow}>
+                  <TextInput
+                    style={[styles.customEmojiInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.foreground }]}
+                    value={customEmojiValue}
+                    onChangeText={setCustomEmojiValue}
+                    placeholder="Paste emoji here 🎉"
+                    placeholderTextColor={colors.muted}
+                    maxLength={8}
+                    autoFocus
+                  />
+                  <Pressable
+                    style={[styles.customEmojiConfirm, { backgroundColor: colors.primary }]}
+                    onPress={() => {
+                      const trimmed = customEmojiValue.trim();
+                      if (trimmed) {
+                        setIcon(trimmed);
+                        setShowCustomInput(false);
+                        setCustomEmojiValue('');
+                      }
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700' }}>Use</Text>
+                  </Pressable>
+                </View>
+              )}
 
               {/* Color Picker */}
               <Text style={[styles.fieldLabel, { color: colors.muted }]}>Color</Text>
@@ -498,6 +543,29 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  addEmojiBtn: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+  },
+  customEmojiRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    gap: 8,
+  },
+  customEmojiInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 22,
+  },
+  customEmojiConfirm: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
   },
   colorGrid: {
     flexDirection: 'row',
