@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import UUID from 'react-native-uuid';
 import * as Haptics from 'expo-haptics';
 import { CATEGORY_ICONS, CATEGORY_COLORS } from '@/lib/defaults';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // ─── Category Form Modal ──────────────────────────────────────────────────────
 
@@ -116,21 +117,47 @@ function CategoryFormModal({
               {!isEdit && (
                 <>
                   <Text style={[styles.fieldLabel, { color: colors.muted }]}>Type</Text>
-                  <View style={[styles.typeToggle, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    {(['expense', 'income'] as const).map(t => (
-                      <Pressable
-                        key={t}
-                        style={[
-                          styles.typeToggleBtn,
-                          type === t && { backgroundColor: t === 'expense' ? colors.expense : colors.income },
-                        ]}
-                        onPress={() => setType(t)}
-                      >
-                        <Text style={[styles.typeToggleBtnText, { color: type === t ? '#fff' : colors.muted }]}>
-                          {t.toUpperCase()}
-                        </Text>
-                      </Pressable>
-                    ))}
+                  <View style={styles.typeToggleRow}>
+                    {(['expense', 'income'] as const).map(t => {
+                      const isActive = type === t;
+                      const glowColor = t === 'expense' ? colors.expense : colors.income;
+                      const gradientColors: [string, string] = t === 'expense'
+                        ? ['#FF6B6B', '#C0392B']
+                        : ['#56FFB8', '#00C97A'];
+                      return (
+                        <Pressable
+                          key={t}
+                          style={[
+                            styles.typeToggleBtn,
+                            {
+                              borderColor: isActive ? glowColor : colors.border,
+                              shadowColor: isActive ? glowColor : 'transparent',
+                              overflow: 'hidden',
+                            },
+                          ]}
+                          onPress={() => setType(t)}
+                        >
+                          {isActive ? (
+                            <LinearGradient
+                              colors={gradientColors}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 0 }}
+                              style={styles.typeToggleBtnGradient}
+                            >
+                              <Text style={[styles.typeToggleBtnText, { color: '#fff' }]}>
+                                {t.toUpperCase()}
+                              </Text>
+                            </LinearGradient>
+                          ) : (
+                            <View style={[styles.typeToggleBtnGradient, { backgroundColor: colors.surface }]}>
+                              <Text style={[styles.typeToggleBtnText, { color: colors.muted }]}>
+                                {t.toUpperCase()}
+                              </Text>
+                            </View>
+                          )}
+                        </Pressable>
+                      );
+                    })}
                   </View>
                 </>
               )}
@@ -310,21 +337,47 @@ export default function CategoriesScreen() {
     <ScreenContainer containerClassName="bg-background">
       {/* Type Toggle */}
       <View style={[styles.typeToggleContainer, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
-        <View style={[styles.typeToggle, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          {(['expense', 'income'] as const).map(t => (
-            <Pressable
-              key={t}
-              style={[
-                styles.typeToggleBtn,
-                activeType === t && { backgroundColor: t === 'expense' ? colors.expense : colors.income },
-              ]}
-              onPress={() => setActiveType(t)}
-            >
-              <Text style={[styles.typeToggleBtnText, { color: activeType === t ? '#fff' : colors.muted }]}>
-                {t.toUpperCase()}
-              </Text>
-            </Pressable>
-          ))}
+        <View style={styles.typeToggleRow}>
+          {(['expense', 'income'] as const).map(t => {
+            const isActive = activeType === t;
+            const glowColor = t === 'expense' ? colors.expense : colors.income;
+            const gradientColors: [string, string] = t === 'expense'
+              ? ['#FF6B6B', '#C0392B']
+              : ['#56FFB8', '#00C97A'];
+            return (
+              <Pressable
+                key={t}
+                style={[
+                  styles.typeToggleBtn,
+                  {
+                    borderColor: isActive ? glowColor : colors.border,
+                    shadowColor: isActive ? glowColor : 'transparent',
+                    overflow: 'hidden',
+                  },
+                ]}
+                onPress={() => setActiveType(t)}
+              >
+                {isActive ? (
+                  <LinearGradient
+                    colors={gradientColors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.typeToggleBtnGradient}
+                  >
+                    <Text style={[styles.typeToggleBtnText, { color: '#fff' }]}>
+                      {t.toUpperCase()}
+                    </Text>
+                  </LinearGradient>
+                ) : (
+                  <View style={[styles.typeToggleBtnGradient, { backgroundColor: colors.surface }]}>
+                    <Text style={[styles.typeToggleBtnText, { color: colors.muted }]}>
+                      {t.toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+            );
+          })}
         </View>
       </View>
 
@@ -373,21 +426,29 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 0.5,
   },
-  typeToggle: {
+  typeToggleRow: {
     flexDirection: 'row',
-    borderRadius: 10,
-    borderWidth: 1,
-    overflow: 'hidden',
+    gap: 8,
   },
   typeToggleBtn: {
     flex: 1,
-    paddingVertical: 10,
+    borderRadius: 30,
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.75,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  typeToggleBtnGradient: {
+    width: '100%',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 11,
   },
   typeToggleBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   grid: {
     padding: 12,
