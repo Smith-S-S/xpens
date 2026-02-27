@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, Pressable, Alert,
-  RefreshControl, StyleSheet, TouchableOpacity,
+  RefreshControl, StyleSheet, TouchableOpacity, Image,
 } from 'react-native';
 import { ScreenContainer } from '@/components/screen-container';
 import { useApp } from '@/lib/AppContext';
@@ -183,11 +183,18 @@ export default function RecordsScreen() {
 
   const renderEmpty = () => (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyEmoji}>📭</Text>
-      <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No transactions</Text>
-      <Text style={[styles.emptySubtitle, { color: colors.muted }]}>
-        No transactions for this month.{'\n'}Tap + to add one.
+      <Image
+        source={require('@/assets/images/no-transactions.png')}
+        style={styles.emptyImage}
+        resizeMode="contain"
+      />
+      <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+        Nothing here yet
       </Text>
+      <Text style={[styles.emptySubtitle, { color: colors.muted }]}>
+        {`No transactions for ${formatMonthYear(year, month)}.\nTap + to record your first one.`}
+      </Text>
+      <Text style={[styles.emptyDots, { color: colors.border }]}>• • •</Text>
     </View>
   );
 
@@ -376,20 +383,28 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 80,
+    paddingTop: 60,
+    paddingHorizontal: 40,
   },
-  emptyEmoji: {
-    fontSize: 56,
-    marginBottom: 16,
+  emptyImage: {
+    width: 220,
+    height: 220,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
-    marginBottom: 8,
+    marginTop: 24,
+    letterSpacing: 0.2,
   },
   emptySubtitle: {
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 22,
+    marginTop: 8,
+  },
+  emptyDots: {
+    fontSize: 18,
+    letterSpacing: 6,
+    marginTop: 20,
   },
 });
