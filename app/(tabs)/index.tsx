@@ -183,11 +183,13 @@ export default function RecordsScreen() {
 
   const renderEmpty = () => (
     <View style={styles.emptyState}>
-      <Image
-        source={require('@/assets/images/no-transactions.png')}
-        style={styles.emptyImage}
-        resizeMode="contain"
-      />
+      <View style={styles.emptyGlow}>
+        <Image
+          source={require('@/assets/images/no-transactions.png')}
+          style={styles.emptyImage}
+          resizeMode="contain"
+        />
+      </View>
       <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
         Nothing here yet
       </Text>

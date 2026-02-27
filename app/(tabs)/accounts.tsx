@@ -221,6 +221,132 @@ function AccountFormModal({
   );
 }
 
+// ─── Quick Edit Modal ─────────────────────────────────────────────────────────
+
+function QuickEditModal({
+  visible,
+  account,
+  onClose,
+  onSaved,
+}: {
+  visible: boolean;
+  account: Account | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const { updateAccount } = useApp();
+  const [name, setName] = useState('');
+  const [balance, setBalance] = useState('');
+  const [nameError, setNameError] = useState('');
+
+  React.useEffect(() => {
+    if (!visible || !account) return;
+    setName(account.name);
+    setBalance(account.initialBalance.toString());
+    setNameError('');
+  }, [visible, account]);
+
+  const handleSave = async () => {
+    if (!name.trim()) { setNameError('Name is required'); return; }
+    if (!account) return;
+    if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    await updateAccount({ ...account, name: name.trim(), initialBalance: parseFloat(balance) || 0 });
+    onSaved();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={qStyles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[qStyles.sheet, { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <View style={[qStyles.handle, { backgroundColor: colors.border }]} />
+          <View style={[qStyles.header, { borderBottomColor: colors.border }]}>
+            <Pressable onPress={onClose}>
+              <Text style={[qStyles.cancel, { color: colors.muted }]}>Cancel</Text>
+            </Pressable>
+            <Text style={[qStyles.title, { color: colors.foreground }]}>Edit Account</Text>
+            <Pressable onPress={handleSave}>
+              <Text style={[qStyles.save, { color: colors.primary }]}>Save</Text>
+            </Pressable>
+          </View>
+
+          <View style={qStyles.body}>
+            {/* Account preview row */}
+            {account && (
+              <View style={[qStyles.previewRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={[qStyles.previewIcon, { backgroundColor: account.color + '25' }]}>
+                  <Text style={{ fontSize: 26 }}>{account.icon}</Text>
+                </View>
+                <Text style={[qStyles.previewType, { color: colors.muted }]}>
+                  {ACCOUNT_TYPES.find(t => t.key === account.type)?.label ?? account.type}
+                </Text>
+              </View>
+            )}
+
+            {/* Name */}
+            <Text style={[qStyles.label, { color: colors.muted }]}>Account Name</Text>
+            <TextInput
+              style={[qStyles.input, {
+                backgroundColor: colors.surface,
+                borderColor: nameError ? colors.expense : colors.border,
+                color: colors.foreground,
+              }]}
+              value={name}
+              onChangeText={t => { setName(t); if (t.trim()) setNameError(''); }}
+              placeholder="Account name"
+              placeholderTextColor={colors.muted}
+              returnKeyType="next"
+            />
+            {!!nameError && <Text style={[qStyles.error, { color: colors.expense }]}>{nameError}</Text>}
+
+            {/* Balance */}
+            <Text style={[qStyles.label, { color: colors.muted }]}>Balance</Text>
+            <View style={[qStyles.balanceRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[qStyles.currSign, { color: colors.primary }]}>$</Text>
+              <TextInput
+                style={[qStyles.balanceInput, { color: colors.foreground }]}
+                value={balance}
+                onChangeText={v => setBalance(v.replace(/[^0-9.-]/g, ''))}
+                keyboardType="decimal-pad"
+                returnKeyType="done"
+                onSubmitEditing={handleSave}
+              />
+            </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const qStyles = StyleSheet.create({
+  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  handle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 10, marginBottom: 4 },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 18, paddingVertical: 14, borderBottomWidth: 0.5,
+  },
+  title: { fontSize: 16, fontWeight: '700' },
+  cancel: { fontSize: 15 },
+  save: { fontSize: 15, fontWeight: '700' },
+  body: { padding: 18, gap: 6 },
+  previewRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderRadius: 12, borderWidth: 1, padding: 12, marginBottom: 10,
+  },
+  previewIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  previewType: { fontSize: 14, fontWeight: '500' },
+  label: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 8 },
+  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
+  error: { fontSize: 12, marginTop: 3 },
+  balanceRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
+  currSign: { fontSize: 20, fontWeight: '700', marginRight: 8 },
+  balanceInput: { flex: 1, fontSize: 20, fontWeight: '600', padding: 0 },
+});
+
 // ─── Accounts Screen ──────────────────────────────────────────────────────────
 
 export default function AccountsScreen() {
@@ -231,6 +357,8 @@ export default function AccountsScreen() {
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [showAddTx, setShowAddTx] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>();
+  const [showQuickEdit, setShowQuickEdit] = useState(false);
+  const [quickEditAccount, setQuickEditAccount] = useState<Account | null>(null);
 
   const totalBalance = accountsWithBalance.reduce((s, a) => s + a.balance, 0);
 
@@ -342,6 +470,13 @@ export default function AccountsScreen() {
         <Text style={[styles.accountCardBalance, { color: balanceColor }]}>
           {item.balance < 0 ? '-' : ''}{formatCurrency(Math.abs(item.balance))}
         </Text>
+        <Pressable
+          style={({ pressed }) => [styles.editIconBtn, pressed && { opacity: 0.5 }]}
+          onPress={() => { setQuickEditAccount(item); setShowQuickEdit(true); }}
+          hitSlop={8}
+        >
+          <IconSymbol name="pencil" size={16} color={colors.muted} />
+        </Pressable>
       </Pressable>
     );
   };
@@ -438,6 +573,13 @@ export default function AccountsScreen() {
         onClose={() => { setShowAddTx(false); setSelectedAccountId(undefined); }}
         onSaved={() => { setShowAddTx(false); setSelectedAccountId(undefined); }}
       />
+
+      <QuickEditModal
+        visible={showQuickEdit}
+        account={quickEditAccount}
+        onClose={() => { setShowQuickEdit(false); setQuickEditAccount(null); }}
+        onSaved={() => { setShowQuickEdit(false); setQuickEditAccount(null); }}
+      />
     </ScreenContainer>
   );
 }
@@ -533,6 +675,10 @@ const styles = StyleSheet.create({
   accountCardBalance: {
     fontSize: 18,
     fontWeight: '800',
+  },
+  editIconBtn: {
+    marginLeft: 10,
+    padding: 4,
   },
   addAccountBtn: {
     flexDirection: 'row',
