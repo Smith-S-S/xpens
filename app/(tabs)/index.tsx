@@ -15,6 +15,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import AddTransactionModal from '@/components/AddTransactionModal';
 import BalanceSummaryChart from '@/components/BalanceSummaryChart';
 import { useSidebar } from '@/lib/SidebarContext';
+import { CategoryIcon } from '@/components/CategoryIcon';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
@@ -149,7 +150,7 @@ export default function RecordsScreen() {
             onPress={() => handleEditTransaction(item)}
           >
             <View style={[styles.categoryIcon, { backgroundColor: (category?.color ?? '#888') + '28' }]}>
-              <Text style={styles.categoryEmoji}>{category?.icon || '💸'}</Text>
+              <CategoryIcon icon={category?.icon || '💸'} size={26} />
             </View>
             <View style={styles.transactionInfo}>
               <Text style={[styles.transactionName, { color: colors.foreground }]}>

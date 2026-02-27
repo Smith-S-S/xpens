@@ -15,6 +15,9 @@ export const DEFAULT_EXPENSE_CATEGORIES: Omit<Category, 'createdAt'>[] = [
   { id: 'cat-pets', name: 'Pets', type: 'expense', icon: '🐾', color: '#8D6E63', isDefault: true, sortOrder: 10 },
   { id: 'cat-personal', name: 'Personal Care', type: 'expense', icon: '💆', color: '#F06292', isDefault: true, sortOrder: 11 },
   { id: 'cat-gifts', name: 'Gifts', type: 'expense', icon: '🎁', color: '#FF7043', isDefault: true, sortOrder: 12 },
+  { id: 'cat-money', name: 'Money', type: 'expense', icon: 'img:money', color: '#66BB6A', isDefault: true, sortOrder: 13 },
+  { id: 'cat-surprise', name: 'Surprise', type: 'expense', icon: 'img:surprised', color: '#FF9800', isDefault: true, sortOrder: 14 },
+  { id: 'cat-unexpected', name: 'Unexpected', type: 'expense', icon: 'img:un-expected', color: '#EF5350', isDefault: true, sortOrder: 15 },
 ];
 
 export const DEFAULT_INCOME_CATEGORIES: Omit<Category, 'createdAt'>[] = [

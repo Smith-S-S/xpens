@@ -12,6 +12,7 @@ import {
   getDaysInMonth,
 } from '@/lib/format';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { CategoryIcon } from '@/components/CategoryIcon';
 import { CategoryWithTotal } from '@/lib/types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -461,7 +462,7 @@ export default function AnalyseScreen() {
             {categoryBreakdown.map(cat => (
               <View key={cat.id} style={[styles.breakdownRow, { borderBottomColor: colors.border }]}>
                 <View style={[styles.breakdownIcon, { backgroundColor: cat.color + '22' }]}>
-                  <Text style={styles.breakdownEmoji}>{cat.icon}</Text>
+                  <CategoryIcon icon={cat.icon} size={24} />
                 </View>
                 <View style={styles.breakdownInfo}>
                   <View style={styles.breakdownTopRow}>

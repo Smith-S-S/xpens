@@ -9,6 +9,7 @@ import { useApp } from '@/lib/AppContext';
 import { Transaction, TransactionType, Category, Account } from '@/lib/types';
 import { todayString, formatCurrency } from '@/lib/format';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { CategoryIcon } from '@/components/CategoryIcon';
 import * as Haptics from 'expo-haptics';
 import UUID from 'react-native-uuid';
 
@@ -109,7 +110,7 @@ function CategoryPicker({
                 onPress={() => { onSelect(item.id); onClose(); }}
               >
                 <View style={[styles.categoryIconCircle, { backgroundColor: item.color + '20' }]}>
-                  <Text style={styles.categoryGridEmoji}>{item.icon}</Text>
+                  <CategoryIcon icon={item.icon} size={26} />
                 </View>
                 <Text style={[styles.categoryGridName, { color: colors.foreground }]} numberOfLines={1}>
                   {item.name}

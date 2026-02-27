@@ -13,6 +13,7 @@ import UUID from 'react-native-uuid';
 import * as Haptics from 'expo-haptics';
 import { CATEGORY_ICONS, CATEGORY_COLORS } from '@/lib/defaults';
 import { LinearGradient } from 'expo-linear-gradient';
+import { CategoryIcon, IMAGE_ICONS } from '@/components/CategoryIcon';
 
 // ─── Category Form Modal ──────────────────────────────────────────────────────
 
@@ -36,7 +37,7 @@ function CategoryFormModal({
 
   const [name, setName] = useState('');
   const [type, setType] = useState<'expense' | 'income'>(defaultType);
-  const [icon, setIcon] = useState('🛒');
+  const [icon, setIcon] = useState(IMAGE_ICONS[0]);
   const [color, setColor] = useState(CATEGORY_COLORS[0]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showCustomInput, setShowCustomInput] = useState(false);
@@ -52,7 +53,7 @@ function CategoryFormModal({
     } else {
       setName('');
       setType(defaultType);
-      setIcon('🛒');
+      setIcon(IMAGE_ICONS[0]);
       setColor(CATEGORY_COLORS[0]);
     }
     setErrors({});
@@ -106,7 +107,7 @@ function CategoryFormModal({
               {/* Preview */}
               <View style={styles.categoryPreview}>
                 <View style={[styles.categoryPreviewIcon, { backgroundColor: color + '25' }]}>
-                  <Text style={{ fontSize: 40 }}>{icon}</Text>
+                  <CategoryIcon icon={icon} size={44} />
                 </View>
                 <Text style={[styles.categoryPreviewName, { color: colors.foreground }]}>
                   {name || 'Category Name'}
@@ -192,6 +193,20 @@ function CategoryFormModal({
                 >
                   <Text style={{ fontSize: 20, color: colors.primary }}>+</Text>
                 </Pressable>
+                {/* PNG image icons */}
+                {IMAGE_ICONS.map(ic => (
+                  <Pressable
+                    key={ic}
+                    style={[
+                      styles.iconOption,
+                      { backgroundColor: colors.surface },
+                      icon === ic && { backgroundColor: color + '30', borderColor: color, borderWidth: 2 },
+                    ]}
+                    onPress={() => setIcon(ic)}
+                  >
+                    <CategoryIcon icon={ic} size={28} />
+                  </Pressable>
+                ))}
                 {CATEGORY_ICONS.map(ic => (
                   <Pressable
                     key={ic}
@@ -320,7 +335,7 @@ export default function CategoriesScreen() {
       delayLongPress={500}
     >
       <View style={[styles.categoryIconCircle, { backgroundColor: item.color + '20' }]}>
-        <Text style={styles.categoryEmoji}>{item.icon}</Text>
+        <CategoryIcon icon={item.icon} size={28} />
       </View>
       <Text style={[styles.categoryName, { color: colors.foreground }]} numberOfLines={1}>
         {item.name}

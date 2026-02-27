@@ -15,12 +15,26 @@ const KEYS = {
 
 export async function initializeStorage(): Promise<void> {
   const initialized = await AsyncStorage.getItem(KEYS.INITIALIZED);
-  if (initialized) return;
+  if (initialized) {
+    // Merge any new default categories added since first install
+    await mergeDefaultCategories();
+    return;
+  }
 
   await AsyncStorage.setItem(KEYS.TRANSACTIONS, JSON.stringify([]));
   await AsyncStorage.setItem(KEYS.ACCOUNTS, JSON.stringify(DEFAULT_ACCOUNTS));
   await AsyncStorage.setItem(KEYS.CATEGORIES, JSON.stringify(DEFAULT_CATEGORIES));
   await AsyncStorage.setItem(KEYS.INITIALIZED, 'true');
+}
+
+/** Adds any DEFAULT_CATEGORIES that are missing from storage (by id). */
+async function mergeDefaultCategories(): Promise<void> {
+  const raw = await AsyncStorage.getItem(KEYS.CATEGORIES);
+  const existing: Category[] = raw ? JSON.parse(raw) : [];
+  const existingIds = new Set(existing.map(c => c.id));
+  const missing = DEFAULT_CATEGORIES.filter(c => !existingIds.has(c.id));
+  if (missing.length === 0) return;
+  await AsyncStorage.setItem(KEYS.CATEGORIES, JSON.stringify([...existing, ...missing]));
 }
 
 // ─── Transactions ────────────────────────────────────────────────────────────
