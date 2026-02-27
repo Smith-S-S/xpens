@@ -8,8 +8,9 @@ import { ScreenContainer } from '@/components/screen-container';
 import { useApp } from '@/lib/AppContext';
 import { useColors } from '@/hooks/use-colors';
 import { Account, AccountType } from '@/lib/types';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, todayString } from '@/lib/format';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { CategoryIcon } from '@/components/CategoryIcon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import UUID from 'react-native-uuid';
 import * as Haptics from 'expo-haptics';
@@ -223,6 +224,13 @@ function AccountFormModal({
 
 // ─── Quick Edit Modal ─────────────────────────────────────────────────────────
 
+// The 3 special reason categories with their icons and IDs
+const BALANCE_REASONS = [
+  { id: 'cat-money',      label: 'Money',      icon: 'img:money' },
+  { id: 'cat-surprise',   label: 'Surprise',   icon: 'img:surprised' },
+  { id: 'cat-unexpected', label: 'Unexpected', icon: 'img:un-expected' },
+] as const;
+
 function QuickEditModal({
   visible,
   account,
@@ -236,23 +244,58 @@ function QuickEditModal({
 }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { updateAccount } = useApp();
+  const { updateAccount, addTransaction } = useApp();
   const [name, setName] = useState('');
   const [balance, setBalance] = useState('');
   const [nameError, setNameError] = useState('');
+  const [reasonId, setReasonId] = useState<string | null>(null);
+  const [reasonError, setReasonError] = useState(false);
+
+  const originalBalance = account?.initialBalance ?? 0;
+  const newBalance = parseFloat(balance) || 0;
+  const balanceChanged = Math.abs(newBalance - originalBalance) > 0.001;
 
   React.useEffect(() => {
     if (!visible || !account) return;
     setName(account.name);
     setBalance(account.initialBalance.toString());
     setNameError('');
+    setReasonId(null);
+    setReasonError(false);
   }, [visible, account]);
+
+  // Reset reason error as soon as one is selected
+  React.useEffect(() => {
+    if (reasonId) setReasonError(false);
+  }, [reasonId]);
 
   const handleSave = async () => {
     if (!name.trim()) { setNameError('Name is required'); return; }
     if (!account) return;
+    if (balanceChanged && !reasonId) { setReasonError(true); return; }
+
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await updateAccount({ ...account, name: name.trim(), initialBalance: parseFloat(balance) || 0 });
+
+    await updateAccount({ ...account, name: name.trim(), initialBalance: newBalance });
+
+    // Auto-create a transaction for the balance difference
+    if (balanceChanged && reasonId) {
+      const diff = newBalance - originalBalance;
+      const txType = diff > 0 ? 'income' : 'expense';
+      const now = new Date().toISOString();
+      await addTransaction({
+        id: String(UUID.v4()),
+        type: txType,
+        amount: Math.abs(diff),
+        categoryId: reasonId,
+        accountId: account.id,
+        date: todayString(),
+        note: `Balance adjustment`,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
     onSaved();
   };
 
@@ -303,17 +346,68 @@ function QuickEditModal({
 
             {/* Balance */}
             <Text style={[qStyles.label, { color: colors.muted }]}>Balance</Text>
-            <View style={[qStyles.balanceRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[qStyles.balanceRow, {
+              backgroundColor: colors.surface,
+              borderColor: balanceChanged ? colors.primary : colors.border,
+            }]}>
               <Text style={[qStyles.currSign, { color: colors.primary }]}>$</Text>
               <TextInput
                 style={[qStyles.balanceInput, { color: colors.foreground }]}
                 value={balance}
-                onChangeText={v => setBalance(v.replace(/[^0-9.-]/g, ''))}
+                onChangeText={v => {
+                  setBalance(v.replace(/[^0-9.-]/g, ''));
+                  setReasonId(null);
+                  setReasonError(false);
+                }}
                 keyboardType="decimal-pad"
                 returnKeyType="done"
-                onSubmitEditing={handleSave}
               />
+              {balanceChanged && (
+                <Text style={[qStyles.balanceDiff, {
+                  color: newBalance > originalBalance ? colors.income : colors.expense,
+                }]}>
+                  {newBalance > originalBalance ? '+' : ''}{(newBalance - originalBalance).toFixed(2)}
+                </Text>
+              )}
             </View>
+
+            {/* Reason picker — only shown when balance changes */}
+            {balanceChanged && (
+              <View style={qStyles.reasonSection}>
+                <Text style={[qStyles.label, {
+                  color: reasonError ? colors.expense : colors.muted,
+                }]}>
+                  Reason *{reasonError ? '  — please select one' : ''}
+                </Text>
+                <View style={qStyles.reasonRow}>
+                  {BALANCE_REASONS.map(r => {
+                    const selected = reasonId === r.id;
+                    return (
+                      <Pressable
+                        key={r.id}
+                        style={[
+                          qStyles.reasonBtn,
+                          {
+                            backgroundColor: selected ? colors.primary + '20' : colors.surface,
+                            borderColor: selected ? colors.primary : reasonError ? colors.expense : colors.border,
+                            borderWidth: selected ? 2 : 1,
+                          },
+                        ]}
+                        onPress={() => setReasonId(r.id)}
+                      >
+                        <CategoryIcon icon={r.icon} size={32} />
+                        <Text style={[qStyles.reasonLabel, {
+                          color: selected ? colors.primary : colors.muted,
+                          fontWeight: selected ? '700' : '500',
+                        }]}>
+                          {r.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
           </View>
         </View>
       </View>
@@ -345,6 +439,14 @@ const qStyles = StyleSheet.create({
   balanceRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
   currSign: { fontSize: 20, fontWeight: '700', marginRight: 8 },
   balanceInput: { flex: 1, fontSize: 20, fontWeight: '600', padding: 0 },
+  balanceDiff: { fontSize: 14, fontWeight: '700', marginLeft: 6 },
+  reasonSection: { marginTop: 4 },
+  reasonRow: { flexDirection: 'row', gap: 10, marginTop: 6 },
+  reasonBtn: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 14, borderRadius: 14, gap: 6,
+  },
+  reasonLabel: { fontSize: 11, letterSpacing: 0.3 },
 });
 
 // ─── Accounts Screen ──────────────────────────────────────────────────────────

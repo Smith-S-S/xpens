@@ -392,7 +392,7 @@ export default function AnalyseScreen() {
               <IconSymbol name="arrow.up" size={16} color={colors.expense} />
             </View>
             <View style={styles.statCardText}>
-              <Text style={[styles.statCardTitle, { color: colors.expense + 'AA' }]}>Outcome</Text>
+              <Text style={[styles.statCardTitle, { color: colors.expense + 'AA' }]}>Expense</Text>
               <Text style={[styles.statCardAmount, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>
                 {formatCurrency(summary.expense, currency)}
               </Text>
