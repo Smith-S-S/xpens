@@ -485,10 +485,10 @@ export default function AnalyseScreen() {
           </View>
         ) : (
           <View style={styles.noDataContainer}>
-            <Text style={styles.noDataEmoji}>📊</Text>
+            {/* <Text style={styles.noDataEmoji}>📊</Text>
             <Text style={[styles.noDataText, { color: colors.muted }]}>
               No {activeType} data for this month
-            </Text>
+            </Text> */}
           </View>
         )}
 

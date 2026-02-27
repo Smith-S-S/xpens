@@ -184,16 +184,16 @@ export default function RecordsScreen() {
 
   const renderEmpty = () => (
     <View style={styles.emptyState}>
-      <View style={styles.emptyGlow}>
+      {/* <View style={styles.emptyGlow}> */}
         <Image
           source={require('@/assets/images/no-transactions.png')}
           style={styles.emptyImage}
           resizeMode="contain"
         />
-      </View>
-      <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+      {/* </View> */}
+      {/* <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
         Nothing here yet
-      </Text>
+      </Text> */}
       <Text style={[styles.emptySubtitle, { color: colors.muted }]}>
         {`No transactions for ${formatMonthYear(year, month)}.\nTap + to record your first one.`}
       </Text>
