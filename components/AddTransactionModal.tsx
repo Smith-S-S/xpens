@@ -10,6 +10,7 @@ import { Transaction, TransactionType, Category, Account } from '@/lib/types';
 import { todayString, formatCurrency } from '@/lib/format';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { CategoryIcon } from '@/components/CategoryIcon';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import UUID from 'react-native-uuid';
 
@@ -34,10 +35,10 @@ function TypeSelector({
   onChange: (t: TransactionType) => void;
   colors: ReturnType<typeof useColors>;
 }) {
-  const types: { key: TransactionType; label: string; color: string }[] = [
-    { key: 'income', label: 'INCOME', color: colors.income },
-    { key: 'expense', label: 'EXPENSE', color: colors.expense },
-    { key: 'transfer', label: 'TRANSFER', color: colors.transfer },
+  const types: { key: TransactionType; label: string; glowColor: string; gradient: [string, string] }[] = [
+    { key: 'income',   label: 'INCOME',   glowColor: colors.income,   gradient: ['#56FFB8', '#00C97A'] },
+    { key: 'expense',  label: 'EXPENSE',  glowColor: colors.expense,  gradient: ['#FF6B6B', '#C0392B'] },
+    { key: 'transfer', label: 'TRANSFER', glowColor: colors.transfer, gradient: ['#64B5F6', '#1565C0'] },
   ];
 
   return (
@@ -49,17 +50,31 @@ function TypeSelector({
             key={t.key}
             style={[
               styles.typeBtn,
-              { borderColor: t.color },
-              active && { backgroundColor: t.color },
+              {
+                borderColor: active ? t.glowColor : colors.border,
+                shadowColor: active ? t.glowColor : 'transparent',
+                overflow: 'hidden',
+              },
             ]}
             onPress={() => {
               if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               onChange(t.key);
             }}
           >
-            <Text style={[styles.typeBtnText, { color: active ? '#fff' : t.color }]}>
-              {t.label}
-            </Text>
+            {active ? (
+              <LinearGradient
+                colors={t.gradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.typeBtnInner}
+              >
+                <Text style={[styles.typeBtnText, { color: '#fff' }]}>{t.label}</Text>
+              </LinearGradient>
+            ) : (
+              <View style={[styles.typeBtnInner, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.typeBtnText, { color: colors.muted }]}>{t.label}</Text>
+              </View>
+            )}
           </Pressable>
         );
       })}
@@ -681,15 +696,23 @@ const styles = StyleSheet.create({
   },
   typeBtn: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1.5,
+    borderRadius: 30,
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.75,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  typeBtnInner: {
+    width: '100%',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 11,
   },
   typeBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   amountContainer: {
     flexDirection: 'row',
