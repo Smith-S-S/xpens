@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/use-colors';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useApp } from '@/lib/AppContext';
+import { CategoryIcon } from '@/components/CategoryIcon';
 
 const CURRENCIES = [
   { symbol: '$',  label: 'USD' },
@@ -166,7 +167,7 @@ export default function Sidebar({ visible, onClose, onOpenExport }: SidebarProps
         <View style={[styles.currencySection, { borderBottomColor: colors.border }]}>
           <View style={styles.currencyHeader}>
             <View style={[styles.menuIconBg, { backgroundColor: colors.primary + '20' }]}>
-              <IconSymbol name="dollarsign.circle.fill" size={18} color={colors.primary} />
+              <CategoryIcon icon="img:money" size={27} />
             </View>
             <Text style={[styles.currencyTitle, { color: colors.foreground }]}>Currency</Text>
             <Text style={[styles.currencyActive, { color: colors.primary }]}>{currency}</Text>
