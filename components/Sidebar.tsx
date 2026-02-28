@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
-  View, Text, Pressable, StyleSheet, Animated, Modal, TextInput,
+  View, Text, Pressable, StyleSheet, Animated, Modal, TextInput, Image,
 } from 'react-native';
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
@@ -161,9 +161,13 @@ export default function Sidebar({ visible, onClose, onOpenExport, onOpenImport }
         <View style={[styles.userSection, { borderBottomColor: colors.border }]}>
           {isSignedIn && user ? (
             <>
-              <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-                <Text style={styles.avatarText}>{initials}</Text>
-              </View>
+              {user.imageUrl ? (
+                <Image source={{ uri: user.imageUrl }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+                  <Text style={styles.avatarText}>{initials}</Text>
+                </View>
+              )}
               {editingName ? (
                 <View style={styles.nameEditRow}>
                   <TextInput
