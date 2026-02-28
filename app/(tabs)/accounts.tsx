@@ -630,11 +630,11 @@ export default function AccountsScreen() {
             </View>
             <View style={{ position: 'relative' }}>
               <Text style={[styles.cardHolderName, { marginLeft: overlayPos.nameML }]} numberOfLines={1}>
-                {user?.fullName ?? 'My Wallet'}
+                {'My Wallet'}
               </Text>
               <Text style={[styles.cardDate, { left: overlayPos.dateL, bottom: overlayPos.dateB }]}>{cardDate}</Text>
               <Text style={[styles.cardUserLabel, { left: overlayPos.userL, bottom: overlayPos.userB }]} numberOfLines={1}>
-                {user?.fullName ?? 'xxx'}
+                {(() => { const n = user?.fullName ?? 'xxx'; return n.length > 6 ? n.slice(0, 2) : n; })()}
               </Text>
             </View>
           </View>

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
-  View, Text, Pressable, StyleSheet, Animated, Modal,
+  View, Text, Pressable, StyleSheet, Animated, Modal, TextInput, Image,
 } from 'react-native';
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
@@ -8,6 +8,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/use-colors';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useApp } from '@/lib/AppContext';
+import { CategoryIcon } from '@/components/CategoryIcon';
+import { upsertSupabaseUser } from '@/lib/supabase-sync';
 
 const CURRENCIES = [
   { symbol: '$',  label: 'USD' },
@@ -26,9 +28,10 @@ interface SidebarProps {
   visible: boolean;
   onClose: () => void;
   onOpenExport: () => void;
+  onOpenImport: () => void;
 }
 
-export default function Sidebar({ visible, onClose, onOpenExport }: SidebarProps) {
+export default function Sidebar({ visible, onClose, onOpenExport, onOpenImport }: SidebarProps) {
   const colors = useColors();
   const router = useRouter();
   const { isSignedIn, signOut } = useAuth();
@@ -38,6 +41,9 @@ export default function Sidebar({ visible, onClose, onOpenExport }: SidebarProps
   const currency = state.currency;
 
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [savingName, setSavingName] = useState(false);
   const translateX = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
 
@@ -90,11 +96,41 @@ export default function Sidebar({ visible, onClose, onOpenExport }: SidebarProps
     onClose();
   }, [onOpenExport, onClose]);
 
+  const handleImport = useCallback(() => {
+    onOpenImport();
+    onClose();
+  }, [onOpenImport, onClose]);
+
   const handleSignOut = useCallback(async () => {
     onClose();
     await signOut();
     setTimeout(() => router.replace('/sign-in'), 250);
   }, [onClose, signOut, router]);
+
+  const handleStartEdit = useCallback(() => {
+    setNameInput(displayName ?? '');
+    setEditingName(true);
+  }, [displayName]);
+
+  const handleSaveName = useCallback(async () => {
+    if (!user || !nameInput.trim()) return;
+    setSavingName(true);
+    try {
+      await user.update({ firstName: nameInput.trim(), lastName: '' });
+      await upsertSupabaseUser(
+        user.id,
+        nameInput.trim(),
+        user.primaryEmailAddress?.emailAddress ?? null,
+        user.imageUrl ?? null,
+      );
+    } catch {}
+    setSavingName(false);
+    setEditingName(false);
+  }, [user, nameInput]);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingName(false);
+  }, []);
 
   return (
     <Modal
@@ -125,12 +161,41 @@ export default function Sidebar({ visible, onClose, onOpenExport }: SidebarProps
         <View style={[styles.userSection, { borderBottomColor: colors.border }]}>
           {isSignedIn && user ? (
             <>
-              <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-                <Text style={styles.avatarText}>{initials}</Text>
-              </View>
-              <Text style={[styles.userName, { color: colors.foreground }]} numberOfLines={1}>
-                {displayName}
-              </Text>
+              {user.imageUrl ? (
+                <Image source={{ uri: user.imageUrl }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+                  <Text style={styles.avatarText}>{initials}</Text>
+                </View>
+              )}
+              {editingName ? (
+                <View style={styles.nameEditRow}>
+                  <TextInput
+                    style={[styles.nameInput, { color: colors.foreground, borderColor: colors.primary, backgroundColor: colors.surface }]}
+                    value={nameInput}
+                    onChangeText={setNameInput}
+                    autoFocus
+                    returnKeyType="done"
+                    onSubmitEditing={handleSaveName}
+                    editable={!savingName}
+                  />
+                  <Pressable onPress={handleSaveName} disabled={savingName} style={[styles.nameActionBtn, { backgroundColor: colors.primary }]}>
+                    <IconSymbol name="checkmark" size={14} color="#fff" />
+                  </Pressable>
+                  <Pressable onPress={handleCancelEdit} style={[styles.nameActionBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}>
+                    <IconSymbol name="xmark" size={14} color={colors.muted} />
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.nameRow}>
+                  <Text style={[styles.userName, { color: colors.foreground }]} numberOfLines={1}>
+                    {displayName}
+                  </Text>
+                  <Pressable onPress={handleStartEdit} hitSlop={8}>
+                    <IconSymbol name="pencil" size={14} color={colors.muted} />
+                  </Pressable>
+                </View>
+              )}
               {email && (
                 <Text style={[styles.userEmail, { color: colors.muted }]} numberOfLines={1}>
                   {email}
@@ -166,7 +231,7 @@ export default function Sidebar({ visible, onClose, onOpenExport }: SidebarProps
         <View style={[styles.currencySection, { borderBottomColor: colors.border }]}>
           <View style={styles.currencyHeader}>
             <View style={[styles.menuIconBg, { backgroundColor: colors.primary + '20' }]}>
-              <IconSymbol name="dollarsign.circle.fill" size={18} color={colors.primary} />
+              <CategoryIcon icon="img:money" size={27} />
             </View>
             <Text style={[styles.currencyTitle, { color: colors.foreground }]}>Currency</Text>
             <Text style={[styles.currencyActive, { color: colors.primary }]}>{currency}</Text>
@@ -198,6 +263,21 @@ export default function Sidebar({ visible, onClose, onOpenExport }: SidebarProps
 
         {/* ── Menu Items ── */}
         <View style={styles.menu}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.menuItem,
+              { borderBottomColor: colors.border },
+              pressed && { backgroundColor: colors.surface },
+            ]}
+            onPress={handleImport}
+          >
+            <View style={[styles.menuIconBg, { backgroundColor: colors.primary + '20' }]}>
+              <IconSymbol name="arrow.down.doc.fill" size={20} color={colors.primary} />
+            </View>
+            <Text style={[styles.menuLabel, { color: colors.foreground }]}>Import Data</Text>
+            <IconSymbol name="chevron.right" size={14} color={colors.muted} />
+          </Pressable>
+
           <Pressable
             style={({ pressed }) => [
               styles.menuItem,
@@ -357,5 +437,31 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '500',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  nameEditRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  nameInput: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  nameActionBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
