@@ -1,12 +1,15 @@
 import { useOAuth } from "@clerk/clerk-expo";
 import * as Linking from "expo-linking";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
 import { useCallback, useState } from "react";
+import { AntDesign } from "@expo/vector-icons";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Platform,
   Pressable,
   StyleSheet,
@@ -18,6 +21,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 WebBrowser.maybeCompleteAuthSession();
 
 const SKIPPED_KEY = "auth_skipped";
+
+const BG      = '#0F0703';
+const SURFACE = '#190D06';
+const BORDER  = '#2A1608';
+const PRIMARY = '#FF6803';
+const MUTED   = '#8B7355';
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -59,28 +68,47 @@ export default function SignInScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      {/* ── Hero area ── */}
+      {/* ── Hero image with fade edges ── */}
       <View style={styles.hero}>
-        {/* Decorative glow blob */}
-        <View style={styles.glowBlob} />
-
-        {/* Icon */}
-        <View style={styles.iconRing}>
-          <Text style={styles.iconEmoji}>💰</Text>
-        </View>
+        <Image
+          source={require('@/assets/images/hands_holding_coin_clean.png')}
+          style={styles.heroImage}
+          resizeMode="contain"
+        />
+        {/* Left fade */}
+        <LinearGradient
+          colors={[BG, 'transparent']}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={[StyleSheet.absoluteFill, { right: '55%' }]}
+        />
+        {/* Right fade */}
+        <LinearGradient
+          colors={['transparent', BG]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={[StyleSheet.absoluteFill, { left: '55%' }]}
+        />
+        {/* Bottom fade */}
+        <LinearGradient
+          colors={['transparent', BG]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={[StyleSheet.absoluteFill, { top: '45%' }]}
+        />
       </View>
 
       {/* ── Content area ── */}
       <View style={styles.content}>
         {/* Brand */}
-        <View style={styles.brand}>
+        {/* <View style={styles.brand}>
           <View style={styles.logoMark}>
-            <Text style={styles.logoLetter}>M</Text>
+            <Text style={styles.logoLetter}>X</Text>
           </View>
-          <Text style={styles.appName}>MyMoney</Text>
-        </View>
+          <Text style={styles.appName}>Xpens</Text>
+        </View> */}
 
-        <Text style={styles.tagline}>Easy way for all your transactions</Text>
+        <Text style={styles.tagline}>"Tracking means you're taking control."</Text>
 
         {/* Buttons */}
         <View style={styles.buttons}>
@@ -98,9 +126,7 @@ export default function SignInScreen() {
               <ActivityIndicator size="small" color="#111" />
             ) : (
               <>
-                <View style={styles.googleG}>
-                  <Text style={styles.googleGText}>G</Text>
-                </View>
+                <AntDesign name="google" size={20} color="#4285F4" />
                 <Text style={styles.googleBtnText}>Continue with Google</Text>
               </>
             )}
@@ -133,12 +159,6 @@ export default function SignInScreen() {
   );
 }
 
-const BG = "#0D0D12";
-const SURFACE = "#16171E";
-const BORDER = "#2A2B35";
-const PRIMARY = "#2563EB";
-const MUTED = "#6B7280";
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -148,34 +168,13 @@ const styles = StyleSheet.create({
   // ── Hero ──
   hero: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
-  glowBlob: {
-    position: "absolute",
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: PRIMARY,
-    opacity: 0.07,
-  },
-  iconRing: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: SURFACE,
-    borderWidth: 1,
-    borderColor: BORDER,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: PRIMARY,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 24,
-    elevation: 12,
-  },
-  iconEmoji: {
-    fontSize: 52,
+  heroImage: {
+    width: '100%',
+    height: '100%',
   },
 
   // ── Content ──
@@ -185,8 +184,8 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   brand: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
   },
   logoMark: {
@@ -194,19 +193,19 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 10,
     backgroundColor: PRIMARY,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logoLetter: {
-    color: "#fff",
+    color: '#fff',
     fontSize: 20,
-    fontWeight: "800",
+    fontWeight: '800',
     letterSpacing: -0.5,
   },
   appName: {
-    color: "#fff",
+    color: '#fff',
     fontSize: 28,
-    fontWeight: "700",
+    fontWeight: '700',
     letterSpacing: -0.5,
   },
   tagline: {
@@ -214,6 +213,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     marginTop: -6,
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
 
   // ── Buttons ──
@@ -222,42 +223,29 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   googleBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 12,
-    backgroundColor: "#fff",
+    backgroundColor: '#fff',
     borderRadius: 14,
     paddingVertical: 16,
     paddingHorizontal: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  googleG: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: "#4285F4",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  googleGText: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: "700",
+    shadowColor: PRIMARY,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
   },
   googleBtnText: {
-    color: "#111",
+    color: '#111',
     fontSize: 15,
-    fontWeight: "600",
+    fontWeight: '600',
     letterSpacing: 0.1,
   },
   divider: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
     marginVertical: 4,
   },
@@ -269,10 +257,10 @@ const styles = StyleSheet.create({
   dividerText: {
     color: MUTED,
     fontSize: 13,
-    fontWeight: "500",
+    fontWeight: '500',
   },
   skipBtn: {
-    alignItems: "center",
+    alignItems: 'center',
     paddingVertical: 14,
     borderRadius: 14,
     borderWidth: 1,
@@ -281,13 +269,13 @@ const styles = StyleSheet.create({
   skipText: {
     color: MUTED,
     fontSize: 15,
-    fontWeight: "500",
+    fontWeight: '500',
     letterSpacing: 0.1,
   },
   disclaimer: {
-    color: "#3D3E4A",
+    color: '#3D2A1A',
     fontSize: 12,
-    textAlign: "center",
+    textAlign: 'center',
     marginTop: 4,
     lineHeight: 18,
   },
