@@ -8,18 +8,33 @@ const KEYS = {
   CATEGORIES: 'mymoney_categories',
   INITIALIZED: 'mymoney_initialized',
   PENDING_DELETES: 'mymoney_pending_deletes',
+  CURRENCY: 'mymoney_currency',
 };
 
 // ─── Initialization ──────────────────────────────────────────────────────────
 
 export async function initializeStorage(): Promise<void> {
   const initialized = await AsyncStorage.getItem(KEYS.INITIALIZED);
-  if (initialized) return;
+  if (initialized) {
+    // Merge any new default categories added since first install
+    await mergeDefaultCategories();
+    return;
+  }
 
   await AsyncStorage.setItem(KEYS.TRANSACTIONS, JSON.stringify([]));
   await AsyncStorage.setItem(KEYS.ACCOUNTS, JSON.stringify(DEFAULT_ACCOUNTS));
   await AsyncStorage.setItem(KEYS.CATEGORIES, JSON.stringify(DEFAULT_CATEGORIES));
   await AsyncStorage.setItem(KEYS.INITIALIZED, 'true');
+}
+
+/** Adds any DEFAULT_CATEGORIES that are missing from storage (by id). */
+async function mergeDefaultCategories(): Promise<void> {
+  const raw = await AsyncStorage.getItem(KEYS.CATEGORIES);
+  const existing: Category[] = raw ? JSON.parse(raw) : [];
+  const existingIds = new Set(existing.map(c => c.id));
+  const missing = DEFAULT_CATEGORIES.filter(c => !existingIds.has(c.id));
+  if (missing.length === 0) return;
+  await AsyncStorage.setItem(KEYS.CATEGORIES, JSON.stringify([...existing, ...missing]));
 }
 
 // ─── Transactions ────────────────────────────────────────────────────────────
@@ -122,6 +137,17 @@ export async function addPendingDelete(id: string): Promise<void> {
 
 export async function clearPendingDeletes(): Promise<void> {
   await AsyncStorage.removeItem(KEYS.PENDING_DELETES);
+}
+
+// ─── Currency ─────────────────────────────────────────────────────────────────
+
+export async function getCurrency(): Promise<string> {
+  const raw = await AsyncStorage.getItem(KEYS.CURRENCY);
+  return raw ?? '$';
+}
+
+export async function saveCurrency(symbol: string): Promise<void> {
+  await AsyncStorage.setItem(KEYS.CURRENCY, symbol);
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

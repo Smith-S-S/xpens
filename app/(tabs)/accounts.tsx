@@ -1,14 +1,16 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, Pressable, Alert,
-  StyleSheet, Modal, TextInput, ScrollView, Platform,
+  StyleSheet, Modal, TextInput, ScrollView, Platform, Image,
 } from 'react-native';
+import { useUser } from '@clerk/clerk-expo';
 import { ScreenContainer } from '@/components/screen-container';
 import { useApp } from '@/lib/AppContext';
 import { useColors } from '@/hooks/use-colors';
 import { Account, AccountType } from '@/lib/types';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, todayString } from '@/lib/format';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { CategoryIcon } from '@/components/CategoryIcon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import UUID from 'react-native-uuid';
 import * as Haptics from 'expo-haptics';
@@ -220,17 +222,299 @@ function AccountFormModal({
   );
 }
 
+// ─── Quick Edit Modal ─────────────────────────────────────────────────────────
+
+// The 3 special reason categories with their icons and IDs
+const BALANCE_REASONS = [
+  { id: 'cat-money',      label: 'Money',      icon: 'img:money' },
+  { id: 'cat-surprise',   label: 'Surprise',   icon: 'img:surprised' },
+  { id: 'cat-unexpected', label: 'Unexpected', icon: 'img:un-expected' },
+] as const;
+
+function QuickEditModal({
+  visible,
+  account,
+  onClose,
+  onSaved,
+}: {
+  visible: boolean;
+  account: Account | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const { updateAccount, addTransaction } = useApp();
+  const [name, setName] = useState('');
+  const [balance, setBalance] = useState('');
+  const [nameError, setNameError] = useState('');
+  const [reasonId, setReasonId] = useState<string | null>(null);
+  const [reasonError, setReasonError] = useState(false);
+
+  const originalBalance = account?.initialBalance ?? 0;
+  const newBalance = parseFloat(balance) || 0;
+  const balanceChanged = Math.abs(newBalance - originalBalance) > 0.001;
+
+  React.useEffect(() => {
+    if (!visible || !account) return;
+    setName(account.name);
+    setBalance(account.initialBalance.toString());
+    setNameError('');
+    setReasonId(null);
+    setReasonError(false);
+  }, [visible, account]);
+
+  // Reset reason error as soon as one is selected
+  React.useEffect(() => {
+    if (reasonId) setReasonError(false);
+  }, [reasonId]);
+
+  const handleSave = async () => {
+    if (!name.trim()) { setNameError('Name is required'); return; }
+    if (!account) return;
+    if (balanceChanged && !reasonId) { setReasonError(true); return; }
+
+    if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    await updateAccount({ ...account, name: name.trim(), initialBalance: newBalance });
+
+    // Auto-create a transaction for the balance difference
+    if (balanceChanged && reasonId) {
+      const diff = newBalance - originalBalance;
+      const txType = diff > 0 ? 'income' : 'expense';
+      const now = new Date().toISOString();
+      await addTransaction({
+        id: String(UUID.v4()),
+        type: txType,
+        amount: Math.abs(diff),
+        categoryId: reasonId,
+        accountId: account.id,
+        date: todayString(),
+        note: `Balance adjustment`,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    onSaved();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={qStyles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[qStyles.sheet, { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <View style={[qStyles.handle, { backgroundColor: colors.border }]} />
+          <View style={[qStyles.header, { borderBottomColor: colors.border }]}>
+            <Pressable onPress={onClose}>
+              <Text style={[qStyles.cancel, { color: colors.muted }]}>Cancel</Text>
+            </Pressable>
+            <Text style={[qStyles.title, { color: colors.foreground }]}>Edit Account</Text>
+            <Pressable onPress={handleSave}>
+              <Text style={[qStyles.save, { color: colors.primary }]}>Save</Text>
+            </Pressable>
+          </View>
+
+          <View style={qStyles.body}>
+            {/* Account preview row */}
+            {account && (
+              <View style={[qStyles.previewRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={[qStyles.previewIcon, { backgroundColor: account.color + '25' }]}>
+                  <Text style={{ fontSize: 26 }}>{account.icon}</Text>
+                </View>
+                <Text style={[qStyles.previewType, { color: colors.muted }]}>
+                  {ACCOUNT_TYPES.find(t => t.key === account.type)?.label ?? account.type}
+                </Text>
+              </View>
+            )}
+
+            {/* Name */}
+            <Text style={[qStyles.label, { color: colors.muted }]}>Account Name</Text>
+            <TextInput
+              style={[qStyles.input, {
+                backgroundColor: colors.surface,
+                borderColor: nameError ? colors.expense : colors.border,
+                color: colors.foreground,
+              }]}
+              value={name}
+              onChangeText={t => { setName(t); if (t.trim()) setNameError(''); }}
+              placeholder="Account name"
+              placeholderTextColor={colors.muted}
+              returnKeyType="next"
+            />
+            {!!nameError && <Text style={[qStyles.error, { color: colors.expense }]}>{nameError}</Text>}
+
+            {/* Balance */}
+            <Text style={[qStyles.label, { color: colors.muted }]}>Balance</Text>
+            <View style={[qStyles.balanceRow, {
+              backgroundColor: colors.surface,
+              borderColor: balanceChanged ? colors.primary : colors.border,
+            }]}>
+              <Text style={[qStyles.currSign, { color: colors.primary }]}>$</Text>
+              <TextInput
+                style={[qStyles.balanceInput, { color: colors.foreground }]}
+                value={balance}
+                onChangeText={v => {
+                  setBalance(v.replace(/[^0-9.-]/g, ''));
+                  setReasonId(null);
+                  setReasonError(false);
+                }}
+                keyboardType="decimal-pad"
+                returnKeyType="done"
+              />
+              {balanceChanged && (
+                <Text style={[qStyles.balanceDiff, {
+                  color: newBalance > originalBalance ? colors.income : colors.expense,
+                }]}>
+                  {newBalance > originalBalance ? '+' : ''}{(newBalance - originalBalance).toFixed(2)}
+                </Text>
+              )}
+            </View>
+
+            {/* Reason picker — only shown when balance changes */}
+            {balanceChanged && (
+              <View style={qStyles.reasonSection}>
+                <Text style={[qStyles.label, {
+                  color: reasonError ? colors.expense : colors.muted,
+                }]}>
+                  Reason *{reasonError ? '  — please select one' : ''}
+                </Text>
+                <View style={qStyles.reasonRow}>
+                  {BALANCE_REASONS.map(r => {
+                    const selected = reasonId === r.id;
+                    return (
+                      <Pressable
+                        key={r.id}
+                        style={[
+                          qStyles.reasonBtn,
+                          {
+                            backgroundColor: selected ? colors.primary + '20' : colors.surface,
+                            borderColor: selected ? colors.primary : reasonError ? colors.expense : colors.border,
+                            borderWidth: selected ? 2 : 1,
+                          },
+                        ]}
+                        onPress={() => setReasonId(r.id)}
+                      >
+                        <CategoryIcon icon={r.icon} size={32} />
+                        <Text style={[qStyles.reasonLabel, {
+                          color: selected ? colors.primary : colors.muted,
+                          fontWeight: selected ? '700' : '500',
+                        }]}>
+                          {r.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const qStyles = StyleSheet.create({
+  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  handle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 10, marginBottom: 4 },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 18, paddingVertical: 14, borderBottomWidth: 0.5,
+  },
+  title: { fontSize: 16, fontWeight: '700' },
+  cancel: { fontSize: 15 },
+  save: { fontSize: 15, fontWeight: '700' },
+  body: { padding: 18, gap: 6 },
+  previewRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderRadius: 12, borderWidth: 1, padding: 12, marginBottom: 10,
+  },
+  previewIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  previewType: { fontSize: 14, fontWeight: '500' },
+  label: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 8 },
+  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
+  error: { fontSize: 12, marginTop: 3 },
+  balanceRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
+  currSign: { fontSize: 20, fontWeight: '700', marginRight: 8 },
+  balanceInput: { flex: 1, fontSize: 20, fontWeight: '600', padding: 0 },
+  balanceDiff: { fontSize: 14, fontWeight: '700', marginLeft: 6 },
+  reasonSection: { marginTop: 4 },
+  reasonRow: { flexDirection: 'row', gap: 10, marginTop: 6 },
+  reasonBtn: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 14, borderRadius: 14, gap: 6,
+  },
+  reasonLabel: { fontSize: 11, letterSpacing: 0.3 },
+});
+
 // ─── Accounts Screen ──────────────────────────────────────────────────────────
 
 export default function AccountsScreen() {
   const colors = useColors();
+  const { user } = useUser();
   const { accountsWithBalance, removeAccount } = useApp();
   const [showForm, setShowForm] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [showAddTx, setShowAddTx] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>();
+  const [showQuickEdit, setShowQuickEdit] = useState(false);
+  const [quickEditAccount, setQuickEditAccount] = useState<Account | null>(null);
 
   const totalBalance = accountsWithBalance.reduce((s, a) => s + a.balance, 0);
+
+  const cardDate = useMemo(() => {
+    const now = new Date();
+    return `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getFullYear()).slice(-2)}`;
+  }, []);
+
+  const displayBalance = useMemo(() => {
+    const formatted = formatCurrency(totalBalance);
+    const digits = (formatted.match(/\d/g) || []).length;
+    if (digits <= 8) return formatted;
+    let seen = 0;
+    for (let i = 0; i < formatted.length; i++) {
+      if (/\d/.test(formatted[i])) seen++;
+      if (seen === 8) return formatted.slice(0, i + 1) + '..';
+    }
+    return formatted;
+  }, [totalBalance]);
+
+  // ── Dynamic overlay positioning ───────────────────────────────────────────
+  const [cardLayout, setCardLayout] = useState({ width: 0, height: 0 });
+  // card_design.png native size
+  const IMG_W = 597, IMG_H = 427;
+  // Red card bounds in image-native pixels (measured from PNG)
+  // Red card: left ~200, top ~55, right ~415, bottom ~375
+  const CONTENT_X = 160, CONTENT_Y = 105, CONTENT_H = 320;
+
+  const overlayPos = useMemo(() => {
+    const { width, height } = cardLayout;
+    if (!width || !height) return null;
+    const scale = Math.min(width / IMG_W, height / IMG_H);
+    const rendW = IMG_W * scale;
+    const rendH = IMG_H * scale;
+    const ox = (width - rendW) / 2;
+    const oy = (height - rendH) / 2;
+    const s = (n: number) => Math.round(n * scale);
+    return {
+      // container bounds
+      left:   ox + s(CONTENT_X),
+      top:    oy + s(CONTENT_Y),
+      height: s(CONTENT_H),
+      width:  s(185),
+      paddingTop:    s(10),
+      paddingBottom: s(145),
+      // text element offsets — all scale with the image
+      labelML: s(19),
+      nameML:  s(25),
+      dateL:   s(245),
+      dateB:   s(104),
+      userL:   s(215),
+      userB:   s(0),
+    };
+  }, [cardLayout]);
 
   const handleLongPress = useCallback((account: Account) => {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -288,16 +572,73 @@ export default function AccountsScreen() {
         <Text style={[styles.accountCardBalance, { color: balanceColor }]}>
           {item.balance < 0 ? '-' : ''}{formatCurrency(Math.abs(item.balance))}
         </Text>
+        <Pressable
+          style={({ pressed }) => [styles.editIconBtn, pressed && { opacity: 0.5 }]}
+          onPress={() => { setQuickEditAccount(item); setShowQuickEdit(true); }}
+          hitSlop={8}
+        >
+          <IconSymbol name="pencil" size={16} color={colors.muted} />
+        </Pressable>
       </Pressable>
     );
   };
 
   return (
     <ScreenContainer containerClassName="bg-background">
-      {/* Total Balance Header */}
-      <View style={[styles.totalHeader, { backgroundColor: colors.primary }]}>
-        <Text style={styles.totalLabel}>Total Balance</Text>
-        <Text style={styles.totalAmount}>{formatCurrency(totalBalance)}</Text>
+      {/* Credit Card PNG + value overlay */}
+      <View
+        style={styles.cardSection}
+        onLayout={e => setCardLayout({
+          width: e.nativeEvent.layout.width,
+          height: e.nativeEvent.layout.height,
+        })}
+      >
+        <Image
+          source={require('@/assets/images/card_design.png')}
+          style={styles.cardBgImage}
+          resizeMode="contain"
+        />
+
+        {/* ··· menu — top-right */}
+        <Pressable
+          style={({ pressed }) => [styles.cardMenuBtn, { opacity: pressed ? 0.6 : 1 }]}
+          onPress={() => { setEditingAccount(null); setShowForm(true); }}
+        >
+          <Text style={[styles.cardMenuText, { color: colors.muted }]}>•••</Text>
+        </Pressable>
+
+        {/* Text overlay — position computed from actual image render bounds */}
+        {overlayPos && (
+          <View
+            style={[styles.cardOverlay, {
+              left: overlayPos.left, top: overlayPos.top,
+              height: overlayPos.height, width: overlayPos.width,
+              paddingTop: overlayPos.paddingTop, paddingBottom: overlayPos.paddingBottom,
+            }]}
+            pointerEvents="none"
+          >
+            <View>
+              <Text
+                style={styles.cardTotalAmount}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.4}
+              >
+                {displayBalance}
+              </Text>
+              <Text style={[styles.cardTotalLabel, { marginLeft: overlayPos.labelML }]}>Total Balance</Text>
+            </View>
+            <View style={{ position: 'relative' }}>
+              <Text style={[styles.cardHolderName, { marginLeft: overlayPos.nameML }]} numberOfLines={1}>
+                {user?.fullName ?? 'My Wallet'}
+              </Text>
+              <Text style={[styles.cardDate, { left: overlayPos.dateL, bottom: overlayPos.dateB }]}>{cardDate}</Text>
+              <Text style={[styles.cardUserLabel, { left: overlayPos.userL, bottom: overlayPos.userB }]} numberOfLines={1}>
+                {user?.fullName ?? 'xxx'}
+              </Text>
+            </View>
+          </View>
+        )}
       </View>
 
       <FlatList
@@ -334,26 +675,74 @@ export default function AccountsScreen() {
         onClose={() => { setShowAddTx(false); setSelectedAccountId(undefined); }}
         onSaved={() => { setShowAddTx(false); setSelectedAccountId(undefined); }}
       />
+
+      <QuickEditModal
+        visible={showQuickEdit}
+        account={quickEditAccount}
+        onClose={() => { setShowQuickEdit(false); setQuickEditAccount(null); }}
+        onSaved={() => { setShowQuickEdit(false); setQuickEditAccount(null); }}
+      />
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  totalHeader: {
-    paddingVertical: 28,
-    alignItems: 'center',
+  cardSection: {
+    height: 320,
+    marginHorizontal: 16,
+    marginTop: 2,
+    marginBottom: 8,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  totalLabel: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    marginBottom: 6,
+  cardBgImage: {
+    width: '100%',
+    height: '100%',
   },
-  totalAmount: {
-    color: '#fff',
-    fontSize: 36,
+  cardMenuBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 0,
+    padding: 8,
+    zIndex: 10,
+  },
+  cardMenuText: {
+    fontSize: 16,
+    letterSpacing: 2,
+  },
+  // Text overlay — left/top/height/width set dynamically via overlayPos
+  cardOverlay: {
+    position: 'absolute',
+    justifyContent: 'space-between',
+  },
+  cardTotalAmount: {
+    color: '#FFFFFF',
+    fontSize: 20,
     fontWeight: '800',
+    marginBottom: 2,
+  },
+  cardTotalLabel: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  cardHolderName: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 11,
+    fontWeight: '600',
+    maxWidth: 165,
+  },
+  cardDate: {
+    position: 'absolute',
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  cardUserLabel: {
+    position: 'absolute',
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 17,
+    fontWeight: '600',
   },
   listContent: {
     padding: 16,
@@ -388,6 +777,10 @@ const styles = StyleSheet.create({
   accountCardBalance: {
     fontSize: 18,
     fontWeight: '800',
+  },
+  editIconBtn: {
+    marginLeft: 10,
+    padding: 4,
   },
   addAccountBtn: {
     flexDirection: 'row',

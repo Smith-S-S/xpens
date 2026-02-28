@@ -7,6 +7,18 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/use-colors';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useApp } from '@/lib/AppContext';
+
+const CURRENCIES = [
+  { symbol: '$',  label: 'USD' },
+  { symbol: '€',  label: 'EUR' },
+  { symbol: '£',  label: 'GBP' },
+  { symbol: '₹',  label: 'INR' },
+  { symbol: '¥',  label: 'JPY' },
+  { symbol: '฿',  label: 'THB' },
+  { symbol: '₩',  label: 'KRW' },
+  { symbol: '₦',  label: 'NGN' },
+];
 
 const SIDEBAR_WIDTH = 280;
 
@@ -22,6 +34,8 @@ export default function Sidebar({ visible, onClose, onOpenExport }: SidebarProps
   const { isSignedIn, signOut } = useAuth();
   const { user } = useUser();
   const insets = useSafeAreaInsets();
+  const { state, setCurrency } = useApp();
+  const currency = state.currency;
 
   const [isModalVisible, setIsModalVisible] = useState(false);
   const translateX = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
@@ -148,6 +162,40 @@ export default function Sidebar({ visible, onClose, onOpenExport }: SidebarProps
           )}
         </View>
 
+        {/* ── Currency Picker ── */}
+        <View style={[styles.currencySection, { borderBottomColor: colors.border }]}>
+          <View style={styles.currencyHeader}>
+            <View style={[styles.menuIconBg, { backgroundColor: colors.primary + '20' }]}>
+              <IconSymbol name="dollarsign.circle.fill" size={18} color={colors.primary} />
+            </View>
+            <Text style={[styles.currencyTitle, { color: colors.foreground }]}>Currency</Text>
+            <Text style={[styles.currencyActive, { color: colors.primary }]}>{currency}</Text>
+          </View>
+          <View style={styles.currencyChips}>
+            {CURRENCIES.map(({ symbol, label }) => {
+              const isSelected = currency === symbol;
+              return (
+                <Pressable
+                  key={symbol}
+                  style={[
+                    styles.chip,
+                    { borderColor: isSelected ? colors.primary : colors.border },
+                    isSelected && { backgroundColor: colors.primary },
+                  ]}
+                  onPress={() => setCurrency(symbol)}
+                >
+                  <Text style={[styles.chipSymbol, { color: isSelected ? '#fff' : colors.foreground }]}>
+                    {symbol}
+                  </Text>
+                  <Text style={[styles.chipLabel, { color: isSelected ? 'rgba(255,255,255,0.75)' : colors.muted }]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
         {/* ── Menu Items ── */}
         <View style={styles.menu}>
           <Pressable
@@ -244,6 +292,48 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  currencySection: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  currencyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  currencyTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  currencyActive: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  currencyChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  chipSymbol: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  chipLabel: {
+    fontSize: 10,
+    fontWeight: '500',
   },
   menu: {
     paddingTop: 8,

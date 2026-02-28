@@ -12,6 +12,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import UUID from 'react-native-uuid';
 import * as Haptics from 'expo-haptics';
 import { CATEGORY_ICONS, CATEGORY_COLORS } from '@/lib/defaults';
+import { LinearGradient } from 'expo-linear-gradient';
+import { CategoryIcon, IMAGE_ICONS } from '@/components/CategoryIcon';
 
 // ─── Category Form Modal ──────────────────────────────────────────────────────
 
@@ -35,9 +37,11 @@ function CategoryFormModal({
 
   const [name, setName] = useState('');
   const [type, setType] = useState<'expense' | 'income'>(defaultType);
-  const [icon, setIcon] = useState('🛒');
+  const [icon, setIcon] = useState(IMAGE_ICONS[0]);
   const [color, setColor] = useState(CATEGORY_COLORS[0]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customEmojiValue, setCustomEmojiValue] = useState('');
 
   React.useEffect(() => {
     if (!visible) return;
@@ -49,10 +53,12 @@ function CategoryFormModal({
     } else {
       setName('');
       setType(defaultType);
-      setIcon('🛒');
+      setIcon(IMAGE_ICONS[0]);
       setColor(CATEGORY_COLORS[0]);
     }
     setErrors({});
+    setShowCustomInput(false);
+    setCustomEmojiValue('');
   }, [visible, category, defaultType]);
 
   const validate = () => {
@@ -101,7 +107,7 @@ function CategoryFormModal({
               {/* Preview */}
               <View style={styles.categoryPreview}>
                 <View style={[styles.categoryPreviewIcon, { backgroundColor: color + '25' }]}>
-                  <Text style={{ fontSize: 40 }}>{icon}</Text>
+                  <CategoryIcon icon={icon} size={44} />
                 </View>
                 <Text style={[styles.categoryPreviewName, { color: colors.foreground }]}>
                   {name || 'Category Name'}
@@ -112,21 +118,47 @@ function CategoryFormModal({
               {!isEdit && (
                 <>
                   <Text style={[styles.fieldLabel, { color: colors.muted }]}>Type</Text>
-                  <View style={[styles.typeToggle, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    {(['expense', 'income'] as const).map(t => (
-                      <Pressable
-                        key={t}
-                        style={[
-                          styles.typeToggleBtn,
-                          type === t && { backgroundColor: t === 'expense' ? colors.expense : colors.income },
-                        ]}
-                        onPress={() => setType(t)}
-                      >
-                        <Text style={[styles.typeToggleBtnText, { color: type === t ? '#fff' : colors.muted }]}>
-                          {t.toUpperCase()}
-                        </Text>
-                      </Pressable>
-                    ))}
+                  <View style={styles.typeToggleRow}>
+                    {(['expense', 'income'] as const).map(t => {
+                      const isActive = type === t;
+                      const glowColor = t === 'expense' ? colors.expense : colors.income;
+                      const gradientColors: [string, string] = t === 'expense'
+                        ? ['#FF6B6B', '#C0392B']
+                        : ['#56FFB8', '#00C97A'];
+                      return (
+                        <Pressable
+                          key={t}
+                          style={[
+                            styles.typeToggleBtn,
+                            {
+                              borderColor: isActive ? glowColor : colors.border,
+                              shadowColor: isActive ? glowColor : 'transparent',
+                              overflow: 'hidden',
+                            },
+                          ]}
+                          onPress={() => setType(t)}
+                        >
+                          {isActive ? (
+                            <LinearGradient
+                              colors={gradientColors}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 0 }}
+                              style={styles.typeToggleBtnGradient}
+                            >
+                              <Text style={[styles.typeToggleBtnText, { color: '#fff' }]}>
+                                {t.toUpperCase()}
+                              </Text>
+                            </LinearGradient>
+                          ) : (
+                            <View style={[styles.typeToggleBtnGradient, { backgroundColor: colors.surface }]}>
+                              <Text style={[styles.typeToggleBtnText, { color: colors.muted }]}>
+                                {t.toUpperCase()}
+                              </Text>
+                            </View>
+                          )}
+                        </Pressable>
+                      );
+                    })}
                   </View>
                 </>
               )}
@@ -146,6 +178,35 @@ function CategoryFormModal({
               {/* Icon Picker */}
               <Text style={[styles.fieldLabel, { color: colors.muted }]}>Icon</Text>
               <View style={styles.iconGrid}>
+                {/* Custom emoji "+" button */}
+                <Pressable
+                  style={[
+                    styles.iconOption,
+                    styles.addEmojiBtn,
+                    { borderColor: colors.primary },
+                    showCustomInput && { backgroundColor: colors.primary + '20', borderWidth: 2 },
+                  ]}
+                  onPress={() => {
+                    setShowCustomInput(v => !v);
+                    setCustomEmojiValue('');
+                  }}
+                >
+                  <Text style={{ fontSize: 20, color: colors.primary }}>+</Text>
+                </Pressable>
+                {/* PNG image icons */}
+                {IMAGE_ICONS.map(ic => (
+                  <Pressable
+                    key={ic}
+                    style={[
+                      styles.iconOption,
+                      { backgroundColor: colors.surface },
+                      icon === ic && { backgroundColor: color + '30', borderColor: color, borderWidth: 2 },
+                    ]}
+                    onPress={() => setIcon(ic)}
+                  >
+                    <CategoryIcon icon={ic} size={28} />
+                  </Pressable>
+                ))}
                 {CATEGORY_ICONS.map(ic => (
                   <Pressable
                     key={ic}
@@ -160,6 +221,32 @@ function CategoryFormModal({
                   </Pressable>
                 ))}
               </View>
+              {showCustomInput && (
+                <View style={styles.customEmojiRow}>
+                  <TextInput
+                    style={[styles.customEmojiInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.foreground }]}
+                    value={customEmojiValue}
+                    onChangeText={setCustomEmojiValue}
+                    placeholder="Paste emoji here 🎉"
+                    placeholderTextColor={colors.muted}
+                    maxLength={8}
+                    autoFocus
+                  />
+                  <Pressable
+                    style={[styles.customEmojiConfirm, { backgroundColor: colors.primary }]}
+                    onPress={() => {
+                      const trimmed = customEmojiValue.trim();
+                      if (trimmed) {
+                        setIcon(trimmed);
+                        setShowCustomInput(false);
+                        setCustomEmojiValue('');
+                      }
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700' }}>Use</Text>
+                  </Pressable>
+                </View>
+              )}
 
               {/* Color Picker */}
               <Text style={[styles.fieldLabel, { color: colors.muted }]}>Color</Text>
@@ -248,7 +335,7 @@ export default function CategoriesScreen() {
       delayLongPress={500}
     >
       <View style={[styles.categoryIconCircle, { backgroundColor: item.color + '20' }]}>
-        <Text style={styles.categoryEmoji}>{item.icon}</Text>
+        <CategoryIcon icon={item.icon} size={28} />
       </View>
       <Text style={[styles.categoryName, { color: colors.foreground }]} numberOfLines={1}>
         {item.name}
@@ -265,21 +352,47 @@ export default function CategoriesScreen() {
     <ScreenContainer containerClassName="bg-background">
       {/* Type Toggle */}
       <View style={[styles.typeToggleContainer, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
-        <View style={[styles.typeToggle, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          {(['expense', 'income'] as const).map(t => (
-            <Pressable
-              key={t}
-              style={[
-                styles.typeToggleBtn,
-                activeType === t && { backgroundColor: t === 'expense' ? colors.expense : colors.income },
-              ]}
-              onPress={() => setActiveType(t)}
-            >
-              <Text style={[styles.typeToggleBtnText, { color: activeType === t ? '#fff' : colors.muted }]}>
-                {t.toUpperCase()}
-              </Text>
-            </Pressable>
-          ))}
+        <View style={styles.typeToggleRow}>
+          {(['expense', 'income'] as const).map(t => {
+            const isActive = activeType === t;
+            const glowColor = t === 'expense' ? colors.expense : colors.income;
+            const gradientColors: [string, string] = t === 'expense'
+              ? ['#FF6B6B', '#C0392B']
+              : ['#56FFB8', '#00C97A'];
+            return (
+              <Pressable
+                key={t}
+                style={[
+                  styles.typeToggleBtn,
+                  {
+                    borderColor: isActive ? glowColor : colors.border,
+                    shadowColor: isActive ? glowColor : 'transparent',
+                    overflow: 'hidden',
+                  },
+                ]}
+                onPress={() => setActiveType(t)}
+              >
+                {isActive ? (
+                  <LinearGradient
+                    colors={gradientColors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.typeToggleBtnGradient}
+                  >
+                    <Text style={[styles.typeToggleBtnText, { color: '#fff' }]}>
+                      {t.toUpperCase()}
+                    </Text>
+                  </LinearGradient>
+                ) : (
+                  <View style={[styles.typeToggleBtnGradient, { backgroundColor: colors.surface }]}>
+                    <Text style={[styles.typeToggleBtnText, { color: colors.muted }]}>
+                      {t.toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+            );
+          })}
         </View>
       </View>
 
@@ -328,21 +441,29 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 0.5,
   },
-  typeToggle: {
+  typeToggleRow: {
     flexDirection: 'row',
-    borderRadius: 10,
-    borderWidth: 1,
-    overflow: 'hidden',
+    gap: 8,
   },
   typeToggleBtn: {
     flex: 1,
-    paddingVertical: 10,
+    borderRadius: 30,
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.75,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  typeToggleBtnGradient: {
+    width: '100%',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 11,
   },
   typeToggleBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   grid: {
     padding: 12,
@@ -498,6 +619,29 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  addEmojiBtn: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+  },
+  customEmojiRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    gap: 8,
+  },
+  customEmojiInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 22,
+  },
+  customEmojiConfirm: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
   },
   colorGrid: {
     flexDirection: 'row',

@@ -2,7 +2,8 @@ import React, { useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
 } from 'react-native';
-import Svg, { G, Path, Circle, Text as SvgText } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { G, Path, Text as SvgText } from 'react-native-svg';
 import { ScreenContainer } from '@/components/screen-container';
 import { useApp } from '@/lib/AppContext';
 import { useColors } from '@/hooks/use-colors';
@@ -11,103 +12,206 @@ import {
   getDaysInMonth,
 } from '@/lib/format';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { CategoryIcon } from '@/components/CategoryIcon';
 import { CategoryWithTotal } from '@/lib/types';
 
-// ─── Donut Chart ─────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-interface DonutSlice {
+function polarToXY(cx: number, cy: number, r: number, angle: number) {
+  return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+}
+
+function petalPath(
+  cx: number, cy: number,
+  innerR: number, outerR: number,
+  startAngle: number, endAngle: number,
+): string {
+  const { x: ix1, y: iy1 } = polarToXY(cx, cy, innerR, startAngle);
+  const { x: ox1, y: oy1 } = polarToXY(cx, cy, outerR, startAngle);
+  const { x: ox2, y: oy2 } = polarToXY(cx, cy, outerR, endAngle);
+  const { x: ix2, y: iy2 } = polarToXY(cx, cy, innerR, endAngle);
+  const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+  return (
+    `M ${ix1} ${iy1} ` +
+    `L ${ox1} ${oy1} ` +
+    `A ${outerR} ${outerR} 0 ${largeArc} 1 ${ox2} ${oy2} ` +
+    `L ${ix2} ${iy2} ` +
+    `A ${innerR} ${innerR} 0 ${largeArc} 0 ${ix1} ${iy1} Z`
+  );
+}
+
+function formatShort(n: number, currency = ''): string {
+  if (n >= 1_000_000) return `${currency}${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${currency}${(n / 1_000).toFixed(1)}K`;
+  return `${currency}${n.toFixed(0)}`;
+}
+
+// ─── Flower Chart ─────────────────────────────────────────────────────────────
+
+interface FlowerSlice {
   value: number;
   color: string;
   label: string;
+  icon: string;
+  percentage: number;
 }
 
-function DonutChart({
+// Always render this many slots so the chart is always a full circle
+const TOTAL_SLOTS = 8;
+const FULL_ANGLE = (2 * Math.PI) / TOTAL_SLOTS; // 45° each
+
+function FlowerChart({
   slices,
   total,
-  size = 220,
-  strokeWidth = 36,
+  size = 280,
   colors,
+  currency = '$',
 }: {
-  slices: DonutSlice[];
+  slices: FlowerSlice[];
   total: number;
   size?: number;
-  strokeWidth?: number;
   colors: ReturnType<typeof useColors>;
+  currency?: string;
 }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
   const cx = size / 2;
   const cy = size / 2;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
+  const innerR   = Math.round(size * 0.155); // center hole — larger for readable text
+  const maxOuter = size * 0.44;              // max petal reach
+  const minOuter = size * 0.28;              // min petal reach (data)
+  const ghostOuter = size * 0.30;            // ghost petal reach (no data)
+  const expandBy = size * 0.055;             // how much active petal expands
+  const gapRad = 0.05;
 
-  const paths = useMemo(() => {
-    if (total === 0) return [];
-    let cumulative = 0;
-    return slices.map((slice, i) => {
-      const pct = slice.value / total;
-      const startAngle = cumulative * 2 * Math.PI - Math.PI / 2;
-      const endAngle = (cumulative + pct) * 2 * Math.PI - Math.PI / 2;
-      cumulative += pct;
+  // Top 8 by value; remaining slots become ghost petals
+  const topSlices = slices.slice(0, TOTAL_SLOTS);
+  const maxVal = Math.max(...topSlices.map(s => s.value), 1);
+  const hasActive = activeIndex !== null;
+  const activeSlice = hasActive ? (topSlices[activeIndex!] ?? null) : null;
 
-      const x1 = cx + radius * Math.cos(startAngle);
-      const y1 = cy + radius * Math.sin(startAngle);
-      const x2 = cx + radius * Math.cos(endAngle);
-      const y2 = cy + radius * Math.sin(endAngle);
-      const largeArc = pct > 0.5 ? 1 : 0;
-
-      const d = `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`;
-      return { d, color: slice.color, index: i, pct };
-    });
-  }, [slices, total, cx, cy, radius]);
-
-  if (total === 0) {
-    return (
-      <View style={[styles.donutEmpty, { width: size, height: size }]}>
-        <Svg width={size} height={size}>
-          <Circle cx={cx} cy={cy} r={radius} stroke={colors.border} strokeWidth={strokeWidth} fill="none" />
-        </Svg>
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={[styles.donutCenterLabel, { color: colors.muted }]}>No data</Text>
-          </View>
-        </View>
-      </View>
-    );
-  }
-
-  const activeSlice = activeIndex !== null ? slices[activeIndex] : null;
+  const handlePress = (i: number) => {
+    setActiveIndex(prev => (prev === i ? null : i));
+  };
 
   return (
     <View style={{ width: size, height: size }}>
       <Svg width={size} height={size}>
-        {paths.map((p, i) => (
-          <Path
-            key={i}
-            d={p.d}
-            stroke={p.color}
-            strokeWidth={activeIndex === i ? strokeWidth + 6 : strokeWidth}
-            fill="none"
-            strokeLinecap="butt"
-            onPress={() => setActiveIndex(activeIndex === i ? null : i)}
-          />
-        ))}
+        {Array.from({ length: TOTAL_SLOTS }).map((_, i) => {
+          const cAngle = (i / TOTAL_SLOTS) * 2 * Math.PI - Math.PI / 2;
+          const sAngle = cAngle - FULL_ANGLE / 2 + gapRad;
+          const eAngle = cAngle + FULL_ANGLE / 2 - gapRad;
+          const slice = topSlices[i] ?? null;
+
+          if (!slice) {
+            return (
+              <Path
+                key={i}
+                d={petalPath(cx, cy, innerR, ghostOuter, sAngle, eAngle)}
+                fill={colors.border}
+                opacity={hasActive ? 0.10 : 0.22}
+              />
+            );
+          }
+
+          const isActive = activeIndex === i;
+          const baseOuter = minOuter + (slice.value / maxVal) * (maxOuter - minOuter);
+          const outerR = isActive ? baseOuter + expandBy : baseOuter;
+          const opacity = hasActive ? (isActive ? 1.0 : 0.35) : 0.88;
+
+          const midAngle = (sAngle + eAngle) / 2;
+          const labelR = innerR + (outerR - innerR) * 0.52;
+          const lp = polarToXY(cx, cy, labelR, midAngle);
+          const showLabel = !isActive && (outerR - innerR > 20);
+
+          return (
+            <G key={i} onPress={() => handlePress(i)}>
+              {/* Invisible hit-area for easier tapping */}
+              <Path
+                d={petalPath(cx, cy, innerR - 4, baseOuter + expandBy + 6, sAngle, eAngle)}
+                fill="transparent"
+              />
+
+              {/* Glow layers behind active petal */}
+              {isActive && (
+                <>
+                  <Path
+                    d={petalPath(cx, cy, Math.max(innerR - 5, 0), outerR + 18, sAngle, eAngle)}
+                    fill={slice.color}
+                    opacity={0.08}
+                  />
+                  <Path
+                    d={petalPath(cx, cy, Math.max(innerR - 3, 0), outerR + 10, sAngle, eAngle)}
+                    fill={slice.color}
+                    opacity={0.15}
+                  />
+                  <Path
+                    d={petalPath(cx, cy, innerR, outerR + 4, sAngle, eAngle)}
+                    fill={slice.color}
+                    opacity={0.25}
+                  />
+                </>
+              )}
+
+              {/* Actual visible petal */}
+              <Path
+                d={petalPath(cx, cy, innerR, outerR, sAngle, eAngle)}
+                fill={slice.color}
+                opacity={opacity}
+              />
+
+              {showLabel && (
+                <>
+                  <SvgText
+                    x={lp.x}
+                    y={lp.y - 5}
+                    textAnchor="middle"
+                    fill="#FFFFFF"
+                    fontSize={10}
+                    fontWeight="bold"
+                  >
+                    {formatShort(slice.value, currency)}
+                  </SvgText>
+                  <SvgText
+                    x={lp.x}
+                    y={lp.y + 7}
+                    textAnchor="middle"
+                    fill="rgba(255,255,255,0.72)"
+                    fontSize={8}
+                  >
+                    {slice.label.length > 8 ? slice.label.slice(0, 7) + '…' : slice.label}
+                  </SvgText>
+                </>
+              )}
+            </G>
+          );
+        })}
       </Svg>
-      <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]} pointerEvents="none">
+
+      {/* Center label — shows selected category or overall total */}
+      <View
+        style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}
+        pointerEvents="none"
+      >
         {activeSlice ? (
           <>
-            <Text style={[styles.donutCenterEmoji]}>{slices[activeIndex!] ? '' : ''}</Text>
-            <Text style={[styles.donutCenterAmount, { color: colors.foreground }]}>
-              {formatCurrency(activeSlice.value)}
+            <Text style={{ fontSize: 20, marginBottom: 2 }}>{activeSlice.icon}</Text>
+            <Text style={{ color: activeSlice.color, fontSize: 12, fontWeight: '800' }}>
+              {formatShort(activeSlice.value, currency)}
             </Text>
-            <Text style={[styles.donutCenterLabel, { color: colors.muted }]}>{activeSlice.label}</Text>
+            <Text style={{ color: colors.foreground, fontSize: 8, fontWeight: '600', marginTop: 1 }}>
+              {activeSlice.percentage.toFixed(0)}%
+            </Text>
+          </>
+        ) : total > 0 ? (
+          <>
+            <Text style={{ color: colors.foreground, fontSize: 13, fontWeight: '800' }}>
+              {formatShort(total, currency)}
+            </Text>
+            <Text style={{ color: colors.muted, fontSize: 9 }}>Total</Text>
           </>
         ) : (
-          <>
-            <Text style={[styles.donutCenterAmount, { color: colors.foreground }]}>
-              {formatCurrency(total)}
-            </Text>
-            <Text style={[styles.donutCenterLabel, { color: colors.muted }]}>Total</Text>
-          </>
+          <Text style={{ color: colors.muted, fontSize: 11 }}>No data</Text>
         )}
       </View>
     </View>
@@ -157,7 +261,8 @@ function DailyBarChart({
 
 export default function AnalyseScreen() {
   const colors = useColors();
-  const { state } = useApp();
+  const { state, setCurrency } = useApp();
+  const currency = state.currency;
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [month, setMonth] = useState(() => new Date().getMonth() + 1);
   const [activeType, setActiveType] = useState<'expense' | 'income'>('expense');
@@ -198,10 +303,12 @@ export default function AnalyseScreen() {
       .sort((a, b) => b.total - a.total);
   }, [monthTransactions, activeType, state.categories]);
 
-  const donutSlices = categoryBreakdown.map(c => ({
+  const flowerSlices: FlowerSlice[] = categoryBreakdown.map(c => ({
     value: c.total,
     color: c.color,
     label: c.name,
+    icon: c.icon,
+    percentage: c.percentage,
   }));
 
   const activeTotal = activeType === 'expense' ? summary.expense : summary.income;
@@ -226,8 +333,6 @@ export default function AnalyseScreen() {
     setMonth(next.month);
   };
 
-  const balanceColor = summary.balance >= 0 ? colors.income : colors.expense;
-
   return (
     <ScreenContainer containerClassName="bg-background">
       {/* Month Navigator */}
@@ -250,59 +355,103 @@ export default function AnalyseScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Summary Cards */}
-        <View style={styles.summaryCards}>
-          <View style={[styles.summaryCard, { backgroundColor: colors.income + '15', borderColor: colors.income + '40' }]}>
-            <Text style={[styles.summaryCardLabel, { color: colors.income }]}>INCOME</Text>
-            <Text style={[styles.summaryCardValue, { color: colors.income }]}>
-              {formatCurrency(summary.income)}
-            </Text>
-          </View>
-          <View style={[styles.summaryCard, { backgroundColor: colors.expense + '15', borderColor: colors.expense + '40' }]}>
-            <Text style={[styles.summaryCardLabel, { color: colors.expense }]}>EXPENSE</Text>
-            <Text style={[styles.summaryCardValue, { color: colors.expense }]}>
-              {formatCurrency(summary.expense)}
-            </Text>
-          </View>
-          <View style={[styles.summaryCard, { backgroundColor: balanceColor + '15', borderColor: balanceColor + '40' }]}>
-            <Text style={[styles.summaryCardLabel, { color: balanceColor }]}>BALANCE</Text>
-            <Text style={[styles.summaryCardValue, { color: balanceColor }]}>
-              {summary.balance >= 0 ? '+' : ''}{formatCurrency(summary.balance)}
-            </Text>
-          </View>
+        {/* ── Statistics Header ── */}
+        <View style={styles.statisticHeader}>
+          <Text style={[styles.statLabel, { color: colors.muted }]}>Total Balance</Text>
+          <Text style={[styles.statBalance, { color: colors.foreground }]}>
+            {formatCurrency(summary.balance, currency)}
+          </Text>
         </View>
 
-        {/* Type Toggle */}
-        <View style={[styles.typeToggle, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          {(['expense', 'income'] as const).map(t => (
-            <Pressable
-              key={t}
-              style={[
-                styles.typeToggleBtn,
-                activeType === t && {
-                  backgroundColor: t === 'expense' ? colors.expense : colors.income,
-                },
-              ]}
-              onPress={() => setActiveType(t)}
-            >
-              <Text style={[
-                styles.typeToggleBtnText,
-                { color: activeType === t ? '#fff' : colors.muted },
-              ]}>
-                {t.toUpperCase()}
+        {/* ── Income / Expense Cards ── */}
+        <View style={styles.statCardsRow}>
+          <LinearGradient
+            colors={['#1a3a2a', '#0d2018']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.statCard, { borderColor: colors.income + '40' }]}
+          >
+            <View style={[styles.statCardIconBg, { backgroundColor: colors.income + '25' }]}>
+              <IconSymbol name="arrow.down" size={16} color={colors.income} />
+            </View>
+            <View style={styles.statCardText}>
+              <Text style={[styles.statCardTitle, { color: colors.income + 'AA' }]}>Income</Text>
+              <Text style={[styles.statCardAmount, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>
+                {formatCurrency(summary.income, currency)}
               </Text>
-            </Pressable>
-          ))}
+            </View>
+          </LinearGradient>
+
+          <LinearGradient
+            colors={['#3a1a1a', '#200d0d']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.statCard, { borderColor: colors.expense + '40' }]}
+          >
+            <View style={[styles.statCardIconBg, { backgroundColor: colors.expense + '25' }]}>
+              <IconSymbol name="arrow.up" size={16} color={colors.expense} />
+            </View>
+            <View style={styles.statCardText}>
+              <Text style={[styles.statCardTitle, { color: colors.expense + 'AA' }]}>Expense</Text>
+              <Text style={[styles.statCardAmount, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>
+                {formatCurrency(summary.expense, currency)}
+              </Text>
+            </View>
+          </LinearGradient>
         </View>
 
-        {/* Donut Chart */}
+        {/* ── Type Toggle ── */}
+        <View style={styles.typeToggleRow}>
+          {(['expense', 'income'] as const).map(t => {
+            const isActive = activeType === t;
+            const glowColor = t === 'expense' ? colors.expense : colors.income;
+            const gradientColors: [string, string] = t === 'expense'
+              ? ['#FF6B6B', '#C0392B']
+              : ['#56FFB8', '#00C97A'];
+            return (
+              <Pressable
+                key={t}
+                style={[
+                  styles.typeToggleBtn,
+                  {
+                    borderColor: isActive ? glowColor : colors.border,
+                    shadowColor: isActive ? glowColor : 'transparent',
+                    overflow: 'hidden',
+                  },
+                ]}
+                onPress={() => setActiveType(t)}
+              >
+                {isActive ? (
+                  <LinearGradient
+                    colors={gradientColors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.typeToggleBtnGradient}
+                  >
+                    <Text style={[styles.typeToggleBtnText, { color: '#fff' }]}>
+                      {t.toUpperCase()}
+                    </Text>
+                  </LinearGradient>
+                ) : (
+                  <View style={[styles.typeToggleBtnGradient, { backgroundColor: colors.surface }]}>
+                    <Text style={[styles.typeToggleBtnText, { color: colors.muted }]}>
+                      {t.toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Flower Chart */}
         <View style={styles.chartContainer}>
-          <DonutChart
-            slices={donutSlices}
+          <FlowerChart
+            slices={flowerSlices}
             total={activeTotal}
-            size={220}
-            strokeWidth={38}
+            size={280}
             colors={colors}
+            currency={currency}
           />
         </View>
 
@@ -310,10 +459,10 @@ export default function AnalyseScreen() {
         {categoryBreakdown.length > 0 ? (
           <View style={[styles.breakdownContainer, { backgroundColor: colors.background }]}>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Category Breakdown</Text>
-            {categoryBreakdown.map((cat, i) => (
+            {categoryBreakdown.map(cat => (
               <View key={cat.id} style={[styles.breakdownRow, { borderBottomColor: colors.border }]}>
-                <View style={[styles.breakdownIcon, { backgroundColor: cat.color + '20' }]}>
-                  <Text style={styles.breakdownEmoji}>{cat.icon}</Text>
+                <View style={[styles.breakdownIcon, { backgroundColor: cat.color + '22' }]}>
+                  <CategoryIcon icon={cat.icon} size={24} />
                 </View>
                 <View style={styles.breakdownInfo}>
                   <View style={styles.breakdownTopRow}>
@@ -336,10 +485,10 @@ export default function AnalyseScreen() {
           </View>
         ) : (
           <View style={styles.noDataContainer}>
-            <Text style={styles.noDataEmoji}>📊</Text>
+            {/* <Text style={styles.noDataEmoji}>📊</Text>
             <Text style={[styles.noDataText, { color: colors.muted }]}>
               No {activeType} data for this month
-            </Text>
+            </Text> */}
           </View>
         )}
 
@@ -397,66 +546,90 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.2,
   },
-  summaryCards: {
-    flexDirection: 'row',
-    padding: 16,
-    gap: 10,
-  },
-  summaryCard: {
-    flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 12,
+  statisticHeader: {
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 22,
+    paddingBottom: 14,
   },
-  summaryCardLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    marginBottom: 4,
+  statLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    letterSpacing: 0.3,
+    marginBottom: 6,
   },
-  summaryCardValue: {
-    fontSize: 14,
+  statBalance: {
+    fontSize: 40,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  statCardsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 12,
+    marginBottom: 14,
+  },
+  statCard: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  statCardIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  statCardText: {
+    flex: 1,
+  },
+  statCardTitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginBottom: 3,
+  },
+  statCardAmount: {
+    fontSize: 16,
     fontWeight: '800',
   },
-  typeToggle: {
+  typeToggleRow: {
     flexDirection: 'row',
     marginHorizontal: 16,
-    borderRadius: 10,
-    borderWidth: 1,
-    overflow: 'hidden',
-    marginBottom: 16,
+    gap: 8,
+    marginBottom: 8,
   },
   typeToggleBtn: {
     flex: 1,
-    paddingVertical: 10,
     alignItems: 'center',
+    borderRadius: 30,
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.75,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  typeToggleBtnGradient: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 11,
   },
   typeToggleBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   chartContainer: {
     alignItems: 'center',
-    marginBottom: 24,
-  },
-  donutEmpty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  donutCenterAmount: {
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  donutCenterLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  donutCenterEmoji: {
-    fontSize: 24,
-    marginBottom: 4,
+    paddingVertical: 12,
+    marginBottom: 8,
   },
   breakdownContainer: {
     paddingHorizontal: 16,

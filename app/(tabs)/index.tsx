@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, Pressable, Alert,
-  RefreshControl, StyleSheet, TouchableOpacity,
+  RefreshControl, StyleSheet, TouchableOpacity, Image,
 } from 'react-native';
 import { ScreenContainer } from '@/components/screen-container';
 import { useApp } from '@/lib/AppContext';
@@ -13,7 +13,9 @@ import {
 } from '@/lib/format';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import AddTransactionModal from '@/components/AddTransactionModal';
+import BalanceSummaryChart from '@/components/BalanceSummaryChart';
 import { useSidebar } from '@/lib/SidebarContext';
+import { CategoryIcon } from '@/components/CategoryIcon';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
@@ -120,60 +122,60 @@ export default function RecordsScreen() {
       style={[styles.deleteAction, { backgroundColor: colors.expense }]}
       onPress={() => handleDelete(transaction)}
     >
-      <IconSymbol name="trash.fill" size={22} color="#fff" />
+      <IconSymbol name="trash.fill" size={20} color="#fff" />
       <Text style={styles.deleteActionText}>Delete</Text>
     </Pressable>
   ), [colors.expense, handleDelete]);
 
   const renderTransaction = useCallback(({ item }: { item: Transaction }) => {
     const category = getCategoryById(item.categoryId);
-    const account = getAccountById(item.accountId);
-    const amountColor = item.type === 'income' ? colors.income
-      : item.type === 'expense' ? colors.expense
-      : colors.transfer;
+    const account  = getAccountById(item.accountId);
+    const amountColor = item.type === 'income'  ? colors.income
+                      : item.type === 'expense' ? colors.expense
+                      : colors.transfer;
     const amountPrefix = item.type === 'income' ? '+' : item.type === 'expense' ? '-' : '';
 
     return (
-      <ReanimatedSwipeable
-        renderRightActions={() => renderRightActions(item)}
-        overshootRight={false}
-      >
-        <Pressable
-          style={({ pressed }) => [
-            styles.transactionRow,
-            { backgroundColor: colors.background },
-            pressed && { opacity: 0.7 },
-          ]}
-          onPress={() => handleEditTransaction(item)}
+      <View style={styles.txCardWrapper}>
+        <ReanimatedSwipeable
+          renderRightActions={() => renderRightActions(item)}
+          overshootRight={false}
         >
-          <View style={[styles.categoryIcon, { backgroundColor: category?.color + '20' || '#eee' }]}>
-            <Text style={styles.categoryEmoji}>{category?.icon || '💸'}</Text>
-          </View>
-          <View style={styles.transactionInfo}>
-            <Text style={[styles.transactionName, { color: colors.foreground }]}>
-              {category?.name || 'Unknown'}
+          <Pressable
+            style={({ pressed }) => [
+              styles.txCard,
+              { backgroundColor: colors.surface },
+              pressed && { opacity: 0.75 },
+            ]}
+            onPress={() => handleEditTransaction(item)}
+          >
+            <View style={[styles.categoryIcon, { backgroundColor: (category?.color ?? '#888') + '28' }]}>
+              <CategoryIcon icon={category?.icon || '💸'} size={26} />
+            </View>
+            <View style={styles.transactionInfo}>
+              <Text style={[styles.transactionName, { color: colors.foreground }]}>
+                {category?.name || 'Unknown'}
+              </Text>
+              <Text style={[styles.transactionSub, { color: colors.muted }]}>
+                {account?.name || '—'}{item.note ? ` · ${item.note}` : ''}
+              </Text>
+            </View>
+            <Text style={[styles.transactionAmount, { color: amountColor }]}>
+              {amountPrefix}{formatCurrency(item.amount)}
             </Text>
-            <Text style={[styles.transactionSub, { color: colors.muted }]}>
-              {account?.name || '—'}{item.note ? ` · ${item.note}` : ''}
-            </Text>
-          </View>
-          <Text style={[styles.transactionAmount, { color: amountColor }]}>
-            {amountPrefix}{formatCurrency(item.amount)}
-          </Text>
-        </Pressable>
-      </ReanimatedSwipeable>
+          </Pressable>
+        </ReanimatedSwipeable>
+      </View>
     );
   }, [colors, getCategoryById, getAccountById, handleEditTransaction, renderRightActions]);
 
   const renderDateGroup = useCallback(({ item }: { item: DateGroup }) => (
     <View>
-      <View style={[styles.dateHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <Text style={[styles.dateHeaderText, { color: colors.muted }]}>
-          {formatDateHeader(item.date)}
-        </Text>
-      </View>
+      <Text style={[styles.dateHeaderText, { color: colors.muted }]}>
+        {formatDateHeader(item.date)}
+      </Text>
       {item.transactions.map(tx => (
-        <View key={tx.id} style={{ borderBottomWidth: 0.5, borderBottomColor: colors.border }}>
+        <View key={tx.id}>
           {renderTransaction({ item: tx })}
         </View>
       ))}
@@ -182,15 +184,22 @@ export default function RecordsScreen() {
 
   const renderEmpty = () => (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyEmoji}>📭</Text>
-      <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No transactions</Text>
+      {/* <View style={styles.emptyGlow}> */}
+        <Image
+          source={require('@/assets/images/no-transactions.png')}
+          style={styles.emptyImage}
+          resizeMode="contain"
+        />
+      {/* </View> */}
+      {/* <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+        Nothing here yet
+      </Text> */}
       <Text style={[styles.emptySubtitle, { color: colors.muted }]}>
-        No transactions for this month.{'\n'}Tap + to add one.
+        {`No transactions for ${formatMonthYear(year, month)}.\nTap + to record your first one.`}
       </Text>
+      <Text style={[styles.emptyDots, { color: colors.border }]}>• • •</Text>
     </View>
   );
-
-  const totalColor = summary.total >= 0 ? colors.income : colors.expense;
 
   return (
     <ScreenContainer containerClassName="bg-background">
@@ -229,36 +238,26 @@ export default function RecordsScreen() {
         </View>
       </View>
 
-      {/* Summary Bar */}
-      <View style={[styles.summaryBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <View style={styles.summaryItem}>
-          <Text style={[styles.summaryLabel, { color: colors.muted }]}>Income</Text>
-          <Text style={[styles.summaryValue, { color: colors.income }]}>
-            {formatCurrency(summary.income)}
-          </Text>
-        </View>
-        <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.summaryItem}>
-          <Text style={[styles.summaryLabel, { color: colors.muted }]}>Expense</Text>
-          <Text style={[styles.summaryValue, { color: colors.expense }]}>
-            {formatCurrency(summary.expense)}
-          </Text>
-        </View>
-        <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.summaryItem}>
-          <Text style={[styles.summaryLabel, { color: colors.muted }]}>Total</Text>
-          <Text style={[styles.summaryValue, { color: totalColor }]}>
-            {summary.total >= 0 ? '+' : ''}{formatCurrency(summary.total)}
-          </Text>
-        </View>
-      </View>
-
       {/* Transaction List */}
       <FlatList
         data={dateGroups}
         keyExtractor={item => item.date}
         renderItem={renderDateGroup}
         ListEmptyComponent={renderEmpty}
+        ListHeaderComponent={
+          <>
+            <BalanceSummaryChart
+              year={year}
+              month={month}
+              transactions={state.transactions}
+              summary={summary}
+              currency={state.currency}
+            />
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+              Recent Transactions
+            </Text>
+          </>
+        }
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -312,53 +311,37 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
-  summaryBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    borderBottomWidth: 0.5,
-  },
-  summaryItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  summaryLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 3,
-  },
-  summaryValue: {
-    fontSize: 15,
+  sectionTitle: {
+    fontSize: 16,
     fontWeight: '700',
-  },
-  summaryDivider: {
-    width: 0.5,
-    height: 32,
-  },
-  dateHeader: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderBottomWidth: 0.5,
+    paddingTop: 20,
+    paddingBottom: 8,
   },
   dateHeaderText: {
     fontSize: 12,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 6,
   },
-  transactionRow: {
+  txCardWrapper: {
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  txCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 14,
+    borderRadius: 14,
   },
   categoryIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -385,8 +368,10 @@ const styles = StyleSheet.create({
   deleteAction: {
     justifyContent: 'center',
     alignItems: 'center',
-    width: 80,
-    paddingHorizontal: 12,
+    width: 76,
+    marginVertical: 4,
+    marginRight: 16,
+    borderRadius: 14,
   },
   deleteActionText: {
     color: '#fff',
@@ -401,20 +386,28 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 80,
+    paddingTop: 60,
+    paddingHorizontal: 40,
   },
-  emptyEmoji: {
-    fontSize: 56,
-    marginBottom: 16,
+  emptyImage: {
+    width: 220,
+    height: 220,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
-    marginBottom: 8,
+    marginTop: 24,
+    letterSpacing: 0.2,
   },
   emptySubtitle: {
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 22,
+    marginTop: 8,
+  },
+  emptyDots: {
+    fontSize: 18,
+    letterSpacing: 6,
+    marginTop: 20,
   },
 });
