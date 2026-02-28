@@ -27,9 +27,10 @@ interface SidebarProps {
   visible: boolean;
   onClose: () => void;
   onOpenExport: () => void;
+  onOpenImport: () => void;
 }
 
-export default function Sidebar({ visible, onClose, onOpenExport }: SidebarProps) {
+export default function Sidebar({ visible, onClose, onOpenExport, onOpenImport }: SidebarProps) {
   const colors = useColors();
   const router = useRouter();
   const { isSignedIn, signOut } = useAuth();
@@ -90,6 +91,11 @@ export default function Sidebar({ visible, onClose, onOpenExport }: SidebarProps
     onOpenExport();
     onClose();
   }, [onOpenExport, onClose]);
+
+  const handleImport = useCallback(() => {
+    onOpenImport();
+    onClose();
+  }, [onOpenImport, onClose]);
 
   const handleSignOut = useCallback(async () => {
     onClose();
@@ -199,6 +205,21 @@ export default function Sidebar({ visible, onClose, onOpenExport }: SidebarProps
 
         {/* ── Menu Items ── */}
         <View style={styles.menu}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.menuItem,
+              { borderBottomColor: colors.border },
+              pressed && { backgroundColor: colors.surface },
+            ]}
+            onPress={handleImport}
+          >
+            <View style={[styles.menuIconBg, { backgroundColor: colors.primary + '20' }]}>
+              <IconSymbol name="square.and.arrow.down" size={18} color={colors.primary} />
+            </View>
+            <Text style={[styles.menuLabel, { color: colors.foreground }]}>Import Data</Text>
+            <IconSymbol name="chevron.right" size={14} color={colors.muted} />
+          </Pressable>
+
           <Pressable
             style={({ pressed }) => [
               styles.menuItem,

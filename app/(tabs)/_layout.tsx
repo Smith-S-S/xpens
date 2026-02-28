@@ -7,6 +7,7 @@ import { useState } from "react";
 import AddTransactionModal from "@/components/AddTransactionModal";
 import Sidebar from "@/components/Sidebar";
 import ExportModal from "@/components/ExportModal";
+import ImportDataModal from "@/components/ImportDataModal";
 import { SidebarProvider, useSidebar } from "@/lib/SidebarContext";
 import * as Haptics from "expo-haptics";
 
@@ -33,6 +34,7 @@ function TabLayoutInner() {
   const tabBarHeight = 60 + bottomPadding;
   const [showAddModal, setShowAddModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const { isSidebarOpen, closeSidebar } = useSidebar();
 
   return (
@@ -130,11 +132,17 @@ function TabLayoutInner() {
         visible={isSidebarOpen}
         onClose={closeSidebar}
         onOpenExport={() => setShowExportModal(true)}
+        onOpenImport={() => setShowImportModal(true)}
       />
 
       <ExportModal
         visible={showExportModal}
         onClose={() => setShowExportModal(false)}
+      />
+
+      <ImportDataModal
+        visible={showImportModal}
+        onClose={() => setShowImportModal(false)}
       />
     </>
   );
