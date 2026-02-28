@@ -51,6 +51,7 @@ const MAPPING = {
   "square.and.arrow.up": "share",
   "arrow.clockwise": "refresh",
   "arrow.down.circle.fill": "download",
+  "arrow.down.doc.fill": "drive-file-move",
   "line.3.horizontal.decrease.circle": "filter-list",
   "line.3.horizontal": "menu",
   "person.fill": "person",

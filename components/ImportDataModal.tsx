@@ -234,17 +234,8 @@ export default function ImportDataModal({
           {step === 'idle' && (
             <ScrollView contentContainerStyle={iStyles.body} showsVerticalScrollIndicator={false}>
               <Text style={[iStyles.hint, { color: colors.muted }]}>
-                Select a CSV or tab-separated file with these 6 columns. Example:
+                Select a CSV or tab-separated file. Example format:
               </Text>
-
-              {/* Column pills */}
-              <View style={[iStyles.colRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                {COLUMNS.map(col => (
-                  <View key={col.key} style={[iStyles.colPill, { borderColor: colors.primary + '55' }]}>
-                    <Text style={[iStyles.colPillText, { color: colors.primary }]}>{col.label}</Text>
-                  </View>
-                ))}
-              </View>
 
               {/* Sample table — 2 example rows */}
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
