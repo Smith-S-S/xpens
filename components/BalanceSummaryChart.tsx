@@ -49,6 +49,7 @@ export default function BalanceSummaryChart({
   const gradId  = useRef('balGrad_' + Math.random().toString(36).slice(2)).current;
   const scrollRef = useRef<ScrollView>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
 
   // ── Daily spending points (expense per day, last 15 days up to today) ────
   const dailyPoints = useMemo((): DailyPoint[] => {
@@ -200,8 +201,14 @@ export default function BalanceSummaryChart({
   const isEmpty     = dailyPoints.every(p => p.amount === 0);
   const totalWidth  = svgData?.totalWidth ?? dailyPoints.length * DAY_WIDTH;
 
+  // When empty, use the visible container width so text stays centered without scrolling
+  const svgWidth = isEmpty && containerWidth > 0 ? containerWidth : totalWidth;
+
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface }]}>
+    <View
+      style={[styles.card, { backgroundColor: colors.surface }]}
+      onLayout={e => setContainerWidth(e.nativeEvent.layout.width)}
+    >
       {/* Header */}
       <View style={styles.header}>
         <View>
@@ -226,10 +233,10 @@ export default function BalanceSummaryChart({
       >
         {/* Full-width content — PanResponder lives here */}
         <View
-          style={{ width: totalWidth, height: TOTAL_H, position: 'relative' }}
+          style={{ width: svgWidth, height: TOTAL_H, position: 'relative' }}
           {...panResponder.panHandlers}
         >
-          <Svg width={totalWidth} height={TOTAL_H}>
+          <Svg width={svgWidth} height={TOTAL_H}>
             <Defs>
               <LinearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
                 <Stop offset="0%"   stopColor={colors.primary} stopOpacity={0.45} />
@@ -240,14 +247,15 @@ export default function BalanceSummaryChart({
             {isEmpty ? (
               <>
                 <Line
-                  x1={0}          y1={PADDING_V + CHART_HEIGHT / 2}
-                  x2={totalWidth} y2={PADDING_V + CHART_HEIGHT / 2}
+                  x1={0}         y1={PADDING_V + CHART_HEIGHT / 2}
+                  x2={svgWidth}  y2={PADDING_V + CHART_HEIGHT / 2}
                   stroke={colors.border} strokeWidth={1.5} strokeDasharray="6 4"
                 />
                 <SvgText
-                  x={totalWidth / 2}
-                  y={PADDING_V + CHART_HEIGHT / 2 - 10}
+                  x={svgWidth / 2}
+                  y={TOTAL_H / 2}
                   textAnchor="middle"
+                  alignmentBaseline="middle"
                   fill={colors.muted}
                   fontSize={12}
                 >
