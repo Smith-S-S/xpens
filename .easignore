@@ -1,0 +1,13 @@
+# Exclude stale npm lockfile — project uses pnpm
+package-lock.json
+
+# Exclude server-side and dev-only files not needed for mobile build
+server/
+dist/
+.vscode/
+.idea/
+tests/
+scripts/generate_qr.mjs
+QA_TEST_PLAN.md
+QA_TODO.md
+releases/
